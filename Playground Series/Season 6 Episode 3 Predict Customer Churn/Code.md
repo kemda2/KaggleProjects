@@ -19,7 +19,7 @@ from IPython.display import display, Image
 import base64, io, os, warnings
 warnings.filterwarnings("ignore")
 
-sns.set_theme(style="darkgrid", palette="muted")
+sns.set_theme(style="whitegrid", palette="deep")
 PLOT_DIR = "/kaggle/working/plots"
 os.makedirs(PLOT_DIR, exist_ok=True)
 
@@ -801,7 +801,7 @@ from IPython.display import display, Image
 import base64, os, warnings
 warnings.filterwarnings("ignore")
 
-sns.set_theme(style="darkgrid", palette="muted")
+sns.set_theme(style="whitegrid", palette="deep")
 PLOT_DIR = "/kaggle/working/plots"
 os.makedirs(PLOT_DIR, exist_ok=True)
 
@@ -1601,4 +1601,5 @@ train, test, target_col, id_col = full_senior_data_pipeline(
     "/kaggle/input/competitions/playground-series-s6e3/",
     "train.csv", "test.csv", "Churn", "id"
 )
+
 ```
