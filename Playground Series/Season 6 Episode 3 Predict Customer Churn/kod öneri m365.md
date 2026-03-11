@@ -1,3 +1,5 @@
+# eklenmemiş
+
 Harika bir ekleme yapmışsın—bu “Extended Senior Data Pipeline (26–34)” bloğu pratikte Kaggle Telco Churn tarzı veri setlerinde çok gerçek işe yarar kontrolleri kapsıyor. Yine de **bir senior analistin mutlaka eklemesi gereken** bazı kritik noktalar ve **küçük ama anlamlı düzeltmeler** var. Aşağıda önce **eksik/yanlış** gördüğüm kısımları maddeler halinde belirtiyorum; ardından **düzeltilmiş ve iyileştirilmiş TAM KODU** ve **“kural kural nasıl ilerleyeceğiz” rehberini** paylaşıyorum.
 
 ***
@@ -958,3 +960,419 @@ def extended_pipeline(
 
 # ekle
 
+Süper—**otomatik dönüşüm yapan yardımcı fonksiyonu** ekliyorum. Ayrıca rapordaki görsellerin HTML’e doğru gömülmesi için **minik bir düzeltme yaması** da aşağıda. Kodlar, not defterine **ayrı bir hücre** olarak eklenebilir.
+
+***
+
+## 🩹 Küçük Yama (Rapor görsellerinin HTML’e doğru gömülmesi)
+
+> Eğer bir önceki “Extended Pipeline v2” bloğunu benim paylaştığım haliyle kullandıysan, `ExtReporter.plot()` içinde `<img>` etiketi eksik kalmış olabilir (base64 direkt yazılmış).  
+> Aşağıdaki **tek satırı** `ExtReporter.plot()` içine **değiştir**:
+
+**Değiştirilecek satır (yanlış):**
+
+```python
+self.h.append(f'<div class="plot-container">data:image/png;base64,{b64}</div>')
+```
+
+**Doğrusu:**
+
+```python
+self.h.append(f'<div class="plot-container">data:image/png;base64,{b64}</div>')
+```
+
+***
+
+## 🧩 Yardımcı Fonksiyon: `apply_recommended_fe(...)`
+
+Aşağıdaki fonksiyon, **Extended raporun önerilerine** dayalı **önerilen FE (Feature Engineering) adımlarını otomatik** uygular.  
+Kapsam:
+
+*   🔒 **Leakage** tespiti ve **otomatik drop** (tek feature AUC > 0.95)
+*   🧼 **Sentinel** değer normalizasyonu (örn: `"No internet service"` → `"No"`)
+*   🧾 **Business rule** anomalileri için **flag** (örn: `is_charges_anomaly`), ayrıca **tenure=0 & TC>0** düzeltme/flag
+*   ⏳ **Tenure bin**/kategori: `tenure_group`
+*   📦 **OOD koruması**: numerikleri **Winsorize/clip** (1–99p), testteki **yeni kategorileri** `"Unknown"`’a eşleme
+*   ✖️ **Aşırı korelasyon** (|ρ|>0.97) için **otomatık sadeleştirme** (düşürülecek kolonu seçerken **hedefle ilişkisi zayıf** olanı atar)
+*   ✨ İsteğe bağlı **interaksiyon (çarpım) feature’ları** oluşturma (SHAP analizinden gelen çiftleri gir)
+*   🧪 Tüm işlemler **idempotent** (aynı hücreyi tekrar çalıştırmak bozulma yaratmaz)
+
+> **Not:** Target encoding, fold içi sızıntısız uygulanmalıdır; onu modelleme hücresinde yapmanı öneriyorum. Bu fonksiyon standartlaştırmayı ve ham FE dönüşümlerini üstlenir.
+
+### Kod
+
+```python
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import StratifiedKFold
+from pandas.api.types import is_numeric_dtype
+
+def _to_numeric(series, min_ratio=0.9):
+    """Objeyi sayıya çevirmeyi dener, yeterli başarı yoksa None döner."""
+    if is_numeric_dtype(series):
+        return series
+    s = pd.to_numeric(series, errors="coerce")
+    return s if s.notna().mean() >= min_ratio else None
+
+def _detect_leakage_single_auc(train, target_col, features, max_rows=20000, auc_threshold=0.95, n_splits=5, n_estimators=50, random_state=42):
+    """Tek feature ile CV AUC ölçüp leakage olası kolonları döner."""
+    if len(train) > max_rows:
+        idx = np.random.choice(len(train), size=max_rows, replace=False)
+        T = train.iloc[idx].reset_index(drop=True)
+    else:
+        T = train.reset_index(drop=True)
+
+    y = T[target_col]
+    leaks = []
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    for col in features:
+        try:
+            x = T[[col]].copy()
+            # Objeleri sayısal koda çevir
+            if not is_numeric_dtype(x[col]):
+                x[col] = pd.factorize(x[col].astype(str))[0]
+            aucs = []
+            for tr, va in skf.split(x, y):
+                rf = RandomForestClassifier(n_estimators=n_estimators, max_depth=4, random_state=random_state, n_jobs=-1)
+                rf.fit(x.iloc[tr], y.iloc[tr])
+                prob = rf.predict_proba(x.iloc[va])[:, 1]
+                aucs.append(roc_auc_score(y.iloc[va], prob))
+            if np.mean(aucs) > auc_threshold:
+                leaks.append(col)
+        except Exception:
+            # tekil değer veya hesaplanamayan kolonları atla
+            pass
+    return leaks
+
+def _winsor_clip_bounds(train_numeric_df, lower_q=0.01, upper_q=0.99):
+    bounds = {}
+    for c in train_numeric_df.columns:
+        s = _to_numeric(train_numeric_df[c])
+        if s is None:
+            continue
+        low = float(s.quantile(lower_q))
+        up  = float(s.quantile(upper_q))
+        if np.isfinite(low) and np.isfinite(up):
+            bounds[c] = (low, up)
+    return bounds
+
+def _apply_clip(df, bounds):
+    for c, (lo, up) in bounds.items():
+        if c in df.columns:
+            s = _to_numeric(df[c])
+            if s is not None:
+                df[c] = np.clip(s, lo, up)
+    return df
+
+def _align_categories(train, test, cat_cols, unknown_token="Unknown"):
+    """Testte görülmeyen kategorileri 'Unknown' yap; train'e de Unknown ekleyerek hizala."""
+    for c in cat_cols:
+        tr = train[c].astype(str).fillna(unknown_token)
+        te = test[c].astype(str).fillna(unknown_token)
+        tr_vals = set(tr.unique())
+        te_mask_new = ~te.isin(tr_vals)
+        if te_mask_new.any():
+            te.loc[te_mask_new] = unknown_token
+            # Train'e Unknown bulundu bilgisi (değilse) eklensin diye kategori string olarak bırakıyoruz.
+        train[c] = tr
+        test[c] = te
+    return train, test
+
+def _drop_high_corr(train, target_col, threshold=0.97, prefer_target=True):
+    """Yüksek korelasyonlu numeric kolonlardan bazılarını düşürür.
+       prefer_target=True ise hedefle korelasyonu daha DÜŞÜK olanı düşürür."""
+    # Numerikleri seç
+    numeric_cols = []
+    for c in train.columns:
+        if c in [target_col]:
+            continue
+        s = _to_numeric(train[c])
+        if s is not None:
+            numeric_cols.append(c)
+    if len(numeric_cols) < 2:
+        return train, []
+
+    Nm = train[numeric_cols].apply(lambda s: pd.to_numeric(s, errors="coerce"))
+    cm = Nm.corr().abs()
+    to_drop = set()
+    # Hedef korelasyonu
+    y = pd.to_numeric(train[target_col], errors="coerce")
+    y_corr = {}
+    if prefer_target:
+        for c in numeric_cols:
+            try:
+                y_corr[c] = abs(pd.concat([Nm[c], y], axis=1).corr().iloc[0,1])
+            except Exception:
+                y_corr[c] = 0.0
+
+    # Greedy: büyükten küçüğe tarama
+    cols = list(cm.columns)
+    for i in range(len(cols)):
+        for j in range(i+1, len(cols)):
+            a, b = cols[i], cols[j]
+            if a in to_drop or b in to_drop:
+                continue
+            if cm.loc[a, b] > threshold:
+                # Düşürülecek kolonu seç
+                if prefer_target:
+                    a_corr = y_corr.get(a, 0.0)
+                    b_corr = y_corr.get(b, 0.0)
+                    drop_col = a if a_corr < b_corr else b
+                else:
+                    # Kardinalitesi yüksek olanı düşür
+                    drop_col = a if train[a].nunique() > train[b].nunique() else b
+                to_drop.add(drop_col)
+    if to_drop:
+        train = train.drop(columns=list(to_drop), errors="ignore")
+    return train, sorted(list(to_drop))
+
+def _make_interactions(train, test, pairs):
+    """Sadece numerik×numerik çarpım kolonları üret."""
+    created = []
+    for (a, b) in pairs or []:
+        if a not in train.columns or b not in train.columns:
+            continue
+        sa_tr, sb_tr = _to_numeric(train[a]), _to_numeric(train[b])
+        sa_te, sb_te = _to_numeric(test[a]),  _to_numeric(test[b])
+        if sa_tr is None or sb_tr is None or sa_te is None or sb_te is None:
+            continue
+        name = f"{a}__x__{b}"
+        train[name] = sa_tr * sb_tr
+        test[name]  = sa_te * sb_te
+        created.append(name)
+    return train, test, created
+
+def apply_recommended_fe(
+    train,
+    test,
+    target_col,
+    id_col=None,
+    # --- Hangi adımlar devrede? ---
+    drop_leakage=True,
+    leakage_auc_threshold=0.95,
+    leakage_max_rows=20000,
+    normalize_sentinels=True,
+    sentinel_values=None,            # None → varsayılan liste
+    add_charges_anomaly_flag=True,
+    fix_tenure_tc_inconsistency=True,
+    add_tenure_bins=True,
+    handle_ood=True,
+    clip_lower_q=0.01,
+    clip_upper_q=0.99,
+    unknown_token="Unknown",
+    reduce_multicollinearity=True,
+    corr_threshold=0.97,
+    prefer_target_on_drop=True,
+    interaction_pairs=None           # örn: [('MonthlyCharges','tenure'), ...]
+):
+    """
+    Kaggle FE Yardımcı — Extended Pipeline önerilerini otomatik uygular.
+
+    Adımlar (kurallara göre):
+      1) Leakage drop (tek feature AUC > threshold)
+      2) Sentinel normalizasyonu ("No internet service" → "No", vb.)
+      3) Business rule flag: is_charges_anomaly = |TC - tenure*MC|/expected oranı bozuk
+      4) tenure=0 & TotalCharges>0 düzeltme/flag
+      5) tenure_group bin (örn: ["0-12","12-24","24-36","36-48","48+"])
+      6) OOD koruması: numerikler clip(1–99p), kategoriklerde testte yeni değerleri "Unknown" yap
+      7) Aşırı korelasyon (|ρ|>threshold) sadeleştirme (hedefle ilişkisi zayıf olanı düş)
+      8) SHAP’tan gelen ikililer için numerik×numerik interaksiyon üret
+
+    Dönüş:
+      train_fe, test_fe, meta
+        - meta['dropped_leaks'], meta['clip_bounds'], meta['dropped_corr'],
+               meta['created_interactions'], meta['sentinel_normalized_cols'],
+               meta['tenure_group_added'], meta['flags_added']
+    """
+    train = train.copy()
+    test  = test.copy()
+    feats = [c for c in train.columns if c not in [target_col, id_col]]
+    meta = {
+        "dropped_leaks": [],
+        "clip_bounds": {},
+        "dropped_corr": [],
+        "created_interactions": [],
+        "sentinel_normalized_cols": [],
+        "tenure_group_added": False,
+        "flags_added": []
+    }
+
+    # 1) Leakage drop
+    if drop_leakage:
+        leak_cols = _detect_leakage_single_auc(
+            train[feats + [target_col]],
+            target_col=target_col,
+            features=feats,
+            max_rows=leakage_max_rows,
+            auc_threshold=leakage_auc_threshold
+        )
+        if leak_cols:
+            train.drop(columns=leak_cols, inplace=True, errors="ignore")
+            test.drop(columns=leak_cols,  inplace=True, errors="ignore")
+            meta["dropped_leaks"] = leak_cols
+            feats = [c for c in feats if c not in leak_cols]
+
+    # 2) Sentinel normalizasyonu
+    if normalize_sentinels:
+        if sentinel_values is None:
+            sentinel_values = ["No internet service", "No phone service", "Unknown", "N/A", "na", "none", "None"]
+        cat_cols = [c for c in feats if not is_numeric_dtype(train[c])]
+        normalized_cols = []
+        for c in cat_cols:
+            tr = train[c].astype(str)
+            te = test[c].astype(str)
+            # Normalize: listedeki tüm sentinel’leri "No" yap
+            tr_rep = tr.replace(sentinel_values, "No")
+            te_rep = te.replace(sentinel_values, "No")
+            if not tr.equals(tr_rep) or not te.equals(te_rep):
+                train[c] = tr_rep
+                test[c]  = te_rep
+                normalized_cols.append(c)
+        meta["sentinel_normalized_cols"] = normalized_cols
+
+    # 3) Business rule flag — is_charges_anomaly
+    if add_charges_anomaly_flag and all(c in train.columns for c in ["TotalCharges","tenure","MonthlyCharges"]):
+        for df in (train, test):
+            tc  = pd.to_numeric(df["TotalCharges"], errors="coerce")
+            ten = pd.to_numeric(df["tenure"],       errors="coerce")
+            mc  = pd.to_numeric(df["MonthlyCharges"], errors="coerce")
+            expected = ten * mc
+            ratio = tc / (expected + 1e-9)
+            flag = ((ratio < 0.5) | (ratio > 2.0)) & (ten > 0)
+            df["is_charges_anomaly"] = flag.astype(int)
+        meta["flags_added"].append("is_charges_anomaly")
+
+    # 4) tenure=0 & TotalCharges>0 düzelt/flag
+    if fix_tenure_tc_inconsistency and all(c in train.columns for c in ["TotalCharges","tenure"]):
+        for df in (train, test):
+            ten = pd.to_numeric(df["tenure"], errors="coerce")
+            tc  = pd.to_numeric(df["TotalCharges"], errors="coerce")
+            bad = (ten == 0) & (tc > 0)
+            # Seçenek: Düzeltme ve flag bir arada
+            df["is_ten0_tcpos"] = bad.astype(int)
+            # TotalCharges’ı 0’a çek
+            df.loc[bad, "TotalCharges"] = 0
+        meta["flags_added"].append("is_ten0_tcpos")
+
+    # 5) Tenure bins
+    if add_tenure_bins and "tenure" in train.columns:
+        for df in (train, test):
+            ten = pd.to_numeric(df["tenure"], errors="coerce")
+            df["tenure_group"] = pd.cut(ten,
+                                        bins=[-1, 12, 24, 36, 48, 10_000],
+                                        labels=["0-12","12-24","24-36","36-48","48+"],
+                                        right=True)
+        meta["tenure_group_added"] = True
+        if "tenure_group" not in feats:
+            feats.append("tenure_group")
+
+    # 6) OOD koruması
+    if handle_ood:
+        # Numerik clip sınırları (train’den hesaplanır)
+        num_cols = []
+        for c in feats:
+            if _to_numeric(train[c]) is not None:
+                num_cols.append(c)
+        clip_bounds = _winsor_clip_bounds(train[num_cols], lower_q=clip_lower_q, upper_q=clip_upper_q)
+        train = _apply_clip(train, clip_bounds)
+        test  = _apply_clip(test,  clip_bounds)
+        meta["clip_bounds"] = clip_bounds
+
+        # Kategoriklerde Unknown token
+        cat_cols = [c for c in feats if _to_numeric(train[c]) is None]
+        train, test = _align_categories(train, test, cat_cols, unknown_token=unknown_token)
+
+    # 7) Yüksek korelasyon sadeleştirme (numeric)
+    if reduce_multicollinearity:
+        # Drop işlemi sadece train’de yapılır; sonra test’ten de aynı kolonlar silinir
+        before_cols = set(train.columns)
+        train2, dropped = _drop_high_corr(train[[*feats, target_col]], target_col=target_col,
+                                          threshold=corr_threshold, prefer_target=prefer_target_on_drop)
+        # Farkı al
+        dropped = [c for c in before_cols if c not in set(train2.columns)]
+        if dropped:
+            # train’i eşitle
+            train = train2
+            # test’ten aynı kolonları at
+            test.drop(columns=dropped, inplace=True, errors="ignore")
+            meta["dropped_corr"] = dropped
+            feats = [c for c in feats if c not in dropped]
+
+    # 8) SHAP interaksiyonlarından gelen çiftler
+    if interaction_pairs:
+        train, test, created = _make_interactions(train, test, interaction_pairs)
+        if created:
+            meta["created_interactions"] = created
+
+    # Dön
+    return train, test, meta
+```
+
+***
+
+## 🧪 Örnek Kullanım (Extended rapordan sonra)
+
+> 1.  Raporu üret:
+
+```python
+ext_actions, fold_preds = extended_pipeline(train, test, target_col, id_col, fast_mode=False)
+```
+
+> 2.  (İsteğe bağlı) SHAP interaksiyonlarından beğendiklerini **manuel** gir:
+
+```python
+# Rapordan aldığınız güçlü çiftleri yazın:
+interaction_pairs = [
+    # ('MonthlyCharges', 'tenure'),
+    # ('Contract', 'PaperlessBilling'),  # NOT: sadece numerik×numerik çarpıyor; bu örnek kategorik×kategorik ise atlanır
+]
+```
+
+> 3.  FE uygula:
+
+```python
+train_fe, test_fe, fe_meta = apply_recommended_fe(
+    train, test,
+    target_col=target_col,
+    id_col=id_col,
+    drop_leakage=True,                # tek feature AUC>0.95 olanları düş
+    leakage_auc_threshold=0.95,
+    normalize_sentinels=True,
+    add_charges_anomaly_flag=True,
+    fix_tenure_tc_inconsistency=True,
+    add_tenure_bins=True,
+    handle_ood=True,                  # numerik clip + yeni kategoriler Unknown
+    clip_lower_q=0.01, clip_upper_q=0.99,
+    unknown_token="Unknown",
+    reduce_multicollinearity=True,    # |ρ|>0.97 için sadeleştirme
+    corr_threshold=0.97,
+    prefer_target_on_drop=True,
+    interaction_pairs=interaction_pairs
+)
+
+print("FE Özeti:", fe_meta)
+```
+
+> 4.  (Modelleme aşaması) **Target Encoding** ve diğer encoding/scale işlemlerini **CV içinde** uygulayın.
+
+*   Kategoriklerde **Unknown** hazır.
+*   `is_charges_anomaly`, `is_ten0_tcpos`, `tenure_group` gibi yeni özellikler var.
+*   Numerikler clip ile **Winsorize** edildi.
+*   Leakage ve aşırı korelasyon kaynaklı kolonlar **temizlendi**.
+*   (Varsa) interaksiyon kolonları eklendi.
+
+***
+
+## 🔎 Notlar & İpuçları
+
+*   **Leakage drop** yeniden hesaplanır. İstersen `drop_leakage=False` deyip, Extended rapordaki `leaks` listesini elle elemek için (veya domain kararıyla) kontrol sende kalsın.
+*   **Tenure bins** (cohort farklarından sonra) genellikle telco benzeri veri setlerinde iyi çalışır.
+*   **Kategorik × kategorik** interaksiyon üretimi bu fonksiyonda **çarpım** olarak yapılmaz (ambiguous). Onlar için **WOE/Target Encoding** sonrası etkileşim denemek daha sağlıklı.
+*   **Aşırı korelasyon** düşümünde, hedefle korelasyonu **daha düşük** olanı bırakmıyoruz; **onu düşürüyoruz** (yani hedefle daha **yüksek** ilişkili olanı **tutuyoruz**).
+*   **Idempotent**: Hücreyi birden fazla çalıştırmak veri bütünlüğünü bozmaz (örn. Unknown zaten Unknown kalır, tekrar drop yapılmaz).
+
+***
+
+Hazırsa bir sonraki adımda, istersen **CV içinde target encoding** ve **sızıntısız eğitim** için kısa bir **modelleme şablonu** da ekleyebilirim (LightGBM + KFold + TE). Ekleyeyim mi?
