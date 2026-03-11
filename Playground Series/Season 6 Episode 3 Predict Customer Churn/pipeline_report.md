@@ -118,7 +118,7 @@
 
 
 
-|    | Feature        |   |r| with Churn |
+|    | Feature        |   \|r\| with Churn |
 |---:|:---------------|-----------------:|
 |  0 | tenure         |           0.4185 |
 |  1 | MonthlyCharges |           0.2730 |
@@ -256,7 +256,7 @@
 
 
 
-|    | İlişki                  | Hedef        |    |r| | Tip     |
+|    | İlişki                  | Hedef        |    \|r\| | Tip     |
 |---:|:------------------------|:-------------|-------:|:--------|
 |  0 | tenure × MonthlyCharges | TotalCharges | 0.9921 | Product |
 
