@@ -11211,36 +11211,40 @@ def eda_report(train_df, test_df=None, target_col=None, **kw):
 if __name__ == "__main__":
     print("\n🚀 Enterprise Senior EDA v3.5 — Demo\n")
     np.random.seed(42); n=800
-    train=pd.DataFrame({
-        "age":np.random.randint(18,70,n),
-        "income":np.random.lognormal(10,1,n),
-        "score":np.random.normal(50,15,n),
-        "credit":np.random.randint(300,850,n),
-        "months":np.random.exponential(24,n).astype(int),
-        "category":np.random.choice(["A","B","C","D"],n),
-        "city":np.random.choice(["Istanbul","Ankara","Izmir","Bursa","Antalya"],n),
-        "education":np.random.choice(["HS","BSc","MSc","PhD"],n,p=[.4,.35,.2,.05]),
-        "review":np.random.choice([
-            "This product is absolutely amazing and I love everything about it",
-            "OK","Terrible experience, would not recommend to anyone at all","Fine"],n),
-        "target":np.random.choice([0,1],n,p=[.7,.3]),
-    })
-    train.loc[train.sample(40).index,"income"]=np.nan
-    train.loc[train.sample(25).index,"score"]=np.nan
-    train.loc[train.sample(15).index,"age"]=np.nan
-    train.loc[train.sample(3).index,"age"]=-5
-    train=pd.concat([train,train.iloc[:3]],ignore_index=True)
-    test=pd.DataFrame({
-        "age":np.random.randint(20,65,250),
-        "income":np.random.lognormal(10.3,1.1,250),
-        "score":np.random.normal(52,14,250),
-        "credit":np.random.randint(300,850,250),
-        "months":np.random.exponential(26,250).astype(int),
-        "category":np.random.choice(["A","B","C","D"],250),
-        "city":np.random.choice(["Istanbul","Ankara","Izmir","Bursa","Antalya"],250),
-        "education":np.random.choice(["HS","BSc","MSc","PhD"],250,p=[.4,.35,.2,.05]),
-        "review":np.random.choice(["Test review","Short","Another review text"],250),
-    })
+    # train=pd.DataFrame({
+    #     "age":np.random.randint(18,70,n),
+    #     "income":np.random.lognormal(10,1,n),
+    #     "score":np.random.normal(50,15,n),
+    #     "credit":np.random.randint(300,850,n),
+    #     "months":np.random.exponential(24,n).astype(int),
+    #     "category":np.random.choice(["A","B","C","D"],n),
+    #     "city":np.random.choice(["Istanbul","Ankara","Izmir","Bursa","Antalya"],n),
+    #     "education":np.random.choice(["HS","BSc","MSc","PhD"],n,p=[.4,.35,.2,.05]),
+    #     "review":np.random.choice([
+    #         "This product is absolutely amazing and I love everything about it",
+    #         "OK","Terrible experience, would not recommend to anyone at all","Fine"],n),
+    #     "target":np.random.choice([0,1],n,p=[.7,.3]),
+    # })
+    # train.loc[train.sample(40).index,"income"]=np.nan
+    # train.loc[train.sample(25).index,"score"]=np.nan
+    # train.loc[train.sample(15).index,"age"]=np.nan
+    # train.loc[train.sample(3).index,"age"]=-5
+    # train=pd.concat([train,train.iloc[:3]],ignore_index=True)
+    # test=pd.DataFrame({
+    #     "age":np.random.randint(20,65,250),
+    #     "income":np.random.lognormal(10.3,1.1,250),
+    #     "score":np.random.normal(52,14,250),
+    #     "credit":np.random.randint(300,850,250),
+    #     "months":np.random.exponential(26,250).astype(int),
+    #     "category":np.random.choice(["A","B","C","D"],250),
+    #     "city":np.random.choice(["Istanbul","Ankara","Izmir","Bursa","Antalya"],250),
+    #     "education":np.random.choice(["HS","BSc","MSc","PhD"],250,p=[.4,.35,.2,.05]),
+    #     "review":np.random.choice(["Test review","Short","Another review text"],250),
+    # })
+
+    train=pd.read_csv("/kaggle/input/competitions/playground-series-s6e3/train.csv")
+    test=pd.read_csv("/kaggle/input/competitions/playground-series-s6e3/test.csv")
+
     eda_report(
         train_df=train,test_df=test,target_col="target",
         lang="tr",outdir="demo_eda_v35",
