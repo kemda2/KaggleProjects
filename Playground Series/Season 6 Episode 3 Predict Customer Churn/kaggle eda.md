@@ -992,3 +992,6 @@ def eda_report_senior_expert(
 # test = pd.read_csv('test.csv')
 # eda_report_senior_expert(train, test, target_col='target', lang='tr', outdir='./kaggle_senior_eda', analyst_note="Feature importance ve drift kritik.")
 ```
+
+# 4. Basit EDA
+
