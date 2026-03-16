@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDA Dashboard v12 — Kaggle Pro</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+:root{--bg:#f4f2ee;--surface:#ffffff;--surface2:#f0ede8;--surface3:#e6e3de;--border:#d5d0c8;--border2:#c4bfb6;--accent:#2563eb;--accent2:#7c3aed;--accent3:#059669;--warn:#d97706;--danger:#dc2626;--text:#1a1a1a;--muted:#6b7280;--dim:#4b5563;--mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;--display:'Syne',sans-serif;--radius:10px;--radius-lg:16px;--shadow:0 1px 3px rgba(0,0,0,.06);--shadow-lg:0 4px 12px rgba(0,0,0,.08)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6;min-height:100vh}
+#app{display:flex;min-height:100vh}
+#sidebar{width:240px;min-width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;box-shadow:2px 0 8px rgba(0,0,0,.04)}
+.sidebar-logo{padding:20px 18px 14px;font-family:var(--display);font-size:16px;font-weight:800;color:var(--accent);border-bottom:1px solid var(--border)}
+.sidebar-logo span{color:var(--muted);font-weight:400;font-size:11px;display:block;margin-top:3px}
+.ns{padding:14px 10px 5px;font-size:10px;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);font-weight:600}
+.ni{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;margin:2px 8px;cursor:pointer;font-size:13px;color:var(--dim);transition:all .15s;user-select:none;font-weight:500}
+.ni:hover{background:var(--surface2);color:var(--text)}
+.ni.active{background:rgba(37,99,235,.08);color:var(--accent);font-weight:600}
+.ni .ic{font-size:16px;width:20px;text-align:center}
+.sidebar-footer{margin-top:auto;padding:14px;font-size:11px;color:var(--muted);border-top:1px solid var(--border)}
+#main{flex:1;min-width:0;padding:28px 36px;overflow-x:hidden}
+.panel{display:none}.panel.active{display:block}
+.sh{display:flex;align-items:center;gap:12px;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid var(--border);flex-wrap:wrap}
+.st{font-family:var(--display);font-size:22px;font-weight:700}
+.sb{background:rgba(37,99,235,.08);color:var(--accent);font-size:11px;padding:3px 10px;border-radius:20px;font-family:var(--mono);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;margin-bottom:18px;box-shadow:var(--shadow)}
+.ct{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:14px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.sbox{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+.sl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.7px}
+.sv{font-family:var(--mono);font-size:24px;font-weight:700;color:var(--text);margin-top:5px;line-height:1.2}
+.ss{font-size:11px;color:var(--dim);margin-top:3px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:600;transition:all .15s}
+.btn-p{background:var(--accent);color:#fff;box-shadow:0 2px 4px rgba(37,99,235,.3)}.btn-p:hover{background:#1d4ed8}
+.btn-s{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
+.dz{border:2px dashed var(--border2);border-radius:var(--radius-lg);padding:40px 24px;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface)}
+.dz:hover,.dz.drag-over{border-color:var(--accent);background:rgba(37,99,235,.03)}
+.dz.loaded{border-color:var(--accent3);background:rgba(5,150,105,.04);border-style:solid}
+.dz .di{font-size:38px;margin-bottom:12px}
+.dz .dtl{font-family:var(--display);font-size:16px;font-weight:700}
+.dz .dsb{color:var(--muted);font-size:12px;margin-top:5px}
+.tw{overflow-x:auto;overflow-y:auto;border-radius:var(--radius);border:1px solid var(--border);max-height:500px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead tr{background:var(--surface2);position:sticky;top:0;z-index:2}
+th{padding:10px 12px;text-align:left;font-weight:700;color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid var(--border)}
+td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:11px;white-space:nowrap}
+tr:hover td{background:var(--surface2)}
+.tag{display:inline-block;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;font-family:var(--mono)}
+.t-n{background:rgba(37,99,235,.1);color:#1d4ed8}.t-c{background:rgba(124,58,237,.1);color:#6d28d9}.t-d{background:rgba(5,150,105,.1);color:#047857}.t-t{background:rgba(217,119,6,.1);color:#b45309}.t-ok{background:rgba(5,150,105,.1);color:#047857}.t-w{background:rgba(217,119,6,.1);color:#b45309}.t-e{background:rgba(220,38,38,.1);color:#b91c1c}.t-id{background:rgba(107,114,128,.1);color:#4b5563}
+select,input[type="text"]{background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:var(--sans);font-size:13px;outline:none;min-width:160px}
+select:focus,input[type="text"]:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.cb{width:100%;min-height:340px}
+.cd{background:rgba(37,99,235,.04);border:1px solid rgba(37,99,235,.12);border-left:3px solid var(--accent);border-radius:var(--radius);padding:11px 15px;font-size:12px;color:var(--dim);line-height:1.7;margin-top:10px}
+.cd.wd{border-left-color:var(--warn)}.cd.od{border-left-color:var(--accent3)}
+.cbl{background:#1e293b;border:1px solid #334155;border-radius:var(--radius);padding:14px 18px;font-family:var(--mono);font-size:11px;color:#93c5fd;line-height:1.7;white-space:pre-wrap;overflow-x:auto;margin-top:10px}
+.cr{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.cl{font-size:12px;color:var(--muted);font-weight:600}
+#lo{display:none;position:fixed;inset:0;background:rgba(244,242,238,.85);backdrop-filter:blur(6px);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+#lo.show{display:flex}
+.sp{display:inline-block;width:30px;height:30px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.al{padding:12px 16px;border-radius:var(--radius);font-size:13px;margin-bottom:14px;font-weight:500}
+.al-i{background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.2);color:#1d4ed8}
+.al-w{background:rgba(217,119,6,.06);border:1px solid rgba(217,119,6,.2);color:#b45309}
+.al-s{background:rgba(5,150,105,.06);border:1px solid rgba(5,150,105,.2);color:#047857}
+.al-d{background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.2);color:#b91c1c}
+::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-track{background:var(--surface2)}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+.rprt{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:36px 40px;box-shadow:var(--shadow-lg)}
+.rh{text-align:center;padding-bottom:24px;border-bottom:3px solid var(--accent);margin-bottom:28px}
+.rh h1{font-family:var(--display);font-size:30px;font-weight:800}
+.rs{margin-bottom:30px}.rs h2{font-family:var(--display);font-size:18px;font-weight:700;color:var(--accent);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.rs h3{font-size:14px;font-weight:700;margin:14px 0 8px}
+.rt{font-size:13px;color:var(--dim);line-height:1.9}
+.rkpi{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:14px 0}
+.rki{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:18px;text-align:center}
+.kv{font-family:var(--mono);font-size:28px;font-weight:700;margin:5px 0}
+.kl{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600}
+.rtbl{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px}
+.rtbl th{background:var(--surface2);padding:10px 14px;text-align:left;font-size:11px;color:var(--dim);border:1px solid var(--border);font-weight:700}
+.rtbl td{padding:10px 14px;border:1px solid var(--border);font-family:var(--mono);font-size:11px}
+.rf{background:var(--surface2);border-left:4px solid var(--accent);padding:12px 16px;margin:10px 0;border-radius:0 8px 8px 0;font-size:13px;color:var(--dim)}
+.rf.rfw{border-left-color:var(--warn)}.rf.rfo{border-left-color:var(--accent3)}
+/* Leakage highlight */
+.leak-row{background:rgba(220,38,38,.06)!important}
+.leak-row td{color:var(--danger)!important;font-weight:700!important}
+@media(max-width:900px){.g4,.rkpi{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){#sidebar{display:none}.g2,.g3{grid-template-columns:1fr}}
+@media print{body{background:#fff!important}#sidebar,#lo,.btn,.cr,.dz{display:none!important}#main{padding:0!important}.panel{display:none!important}#panel-report{display:block!important}.rprt{border:none;box-shadow:none}*{color:#111!important}}
+</style>
+</head>
+<body>
+<div id="lo"><div class="sp"></div><div style="font-family:var(--mono);font-size:13px;color:var(--accent)" id="lt">...</div></div>
+<div id="app">
+<nav id="sidebar">
+  <div class="sidebar-logo">📊 EDA Panel <span>Kaggle Pro · v12</span></div>
+  <div class="ns">Veri</div>
+  <div class="ni active" onclick="go('data')"><span class="ic">📁</span>Yükleme</div>
+  <div class="ni" onclick="go('overview')"><span class="ic">📊</span>Genel Bakış</div>
+  <div class="ni" onclick="go('missing')"><span class="ic">❓</span>Eksik Değer</div>
+  <div class="ns">Keşif</div>
+  <div class="ni" onclick="go('numeric')"><span class="ic">🔢</span>Sayısal</div>
+  <div class="ni" onclick="go('categorical')"><span class="ic">📝</span>Kategorik</div>
+  <div class="ni" onclick="go('corr')"><span class="ic">🔗</span>Korelasyon</div>
+  <div class="ni" onclick="go('outlier')"><span class="ic">⚠️</span>Outlier</div>
+  <div class="ns">Kaggle Pro</div>
+  <div class="ni" onclick="go('importance')"><span class="ic">🏆</span>Feature Importance</div>
+  <div class="ni" onclick="go('scatter')"><span class="ic">🔵</span>Scatter Matrix</div>
+  <div class="ni" onclick="go('leakage')"><span class="ic">🚨</span>Leakage Detect</div>
+  <div class="ni" onclick="go('target')"><span class="ic">🎯</span>Target</div>
+  <div class="ni" onclick="go('drift')"><span class="ic">🔀</span>Train vs Test</div>
+  <div class="ni" onclick="go('memory')"><span class="ic">💾</span>Memory Opt.</div>
+  <div class="ni" onclick="go('fe')"><span class="ic">⚙️</span>Feature Eng.</div>
+  <div class="ni" onclick="go('report')"><span class="ic">📋</span>Rapor</div>
+  <div class="sidebar-footer">v12 · Kaggle Pro Edition</div>
+</nav>
+<div id="main">
+  <!-- DATA -->
+  <div id="panel-data" class="panel active">
+    <div class="sh"><div class="st">Veri Yükleme</div><div class="sb">CSV</div></div>
+    <div class="g2" style="margin-bottom:18px">
+      <div><div class="dz" id="dz-tr"><div class="di">📂</div><div class="dtl">Train CSV — Sürükle / Tıkla</div><div class="dsb">Tüm işlemler tarayıcıda</div></div><input type="file" id="f-tr" accept=".csv" style="display:none"></div>
+      <div><div class="dz" id="dz-te"><div class="di">📂</div><div class="dtl">Test CSV — Sürükle / Tıkla</div><div class="dsb">Drift analizi için</div></div><input type="file" id="f-te" accept=".csv" style="display:none"></div>
+    </div>
+    <div class="card"><div class="ct">Config</div><div style="display:flex;gap:14px;flex-wrap:wrap"><div><div style="font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600">Target</div><input type="text" id="cfg-t" placeholder="auto" style="width:180px"></div><div><div style="font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:600">ID</div><input type="text" id="cfg-i" placeholder="id" style="width:130px"></div></div></div>
+    <div id="lr" style="display:none"><div class="g4" id="ls" style="margin-bottom:18px"></div><div class="card"><div class="ct">Önizleme</div><div id="pt" class="tw"></div></div><div class="card" style="margin-top:18px"><div class="ct">Sütun Bilgileri</div><div id="st2" class="tw"></div></div><div style="margin-top:18px"><button class="btn btn-p" onclick="go('overview')">📊 Analize Başla →</button></div></div>
+  </div>
+
+  <div id="panel-overview" class="panel"><div class="sh"><div class="st">Genel Bakış</div><div class="sb" id="ob">—</div></div><div id="oc"></div></div>
+  <div id="panel-missing" class="panel"><div class="sh"><div class="st">Eksik Değer</div></div><div id="mc"></div></div>
+  <div id="panel-numeric" class="panel"><div class="sh"><div class="st">Sayısal Analiz</div></div><div class="cr"><span class="cl">Sütun:</span><select id="ns" onchange="rNum()"></select></div><div id="nc"></div></div>
+  <div id="panel-categorical" class="panel"><div class="sh"><div class="st">Kategorik Analiz</div></div><div class="cr"><span class="cl">Sütun:</span><select id="cs" onchange="rCat()"></select></div><div id="cc"></div></div>
+  <div id="panel-corr" class="panel"><div class="sh"><div class="st">Korelasyon</div><div class="sb" id="crb">target dahil</div></div><div class="cr"><span class="cl">Max:</span><select id="cm" onchange="rCorr()"><option>20</option><option>30</option><option>50</option></select></div><div id="crc"></div></div>
+  <div id="panel-outlier" class="panel"><div class="sh"><div class="st">Outlier</div></div><div id="olc"></div></div>
+
+  <!-- NEW: Feature Importance -->
+  <div id="panel-importance" class="panel"><div class="sh"><div class="st">🏆 Feature Importance</div><div class="sb">Pearson + Cramér's V + MI</div></div><div id="fic"></div></div>
+
+  <!-- NEW: Scatter Matrix -->
+  <div id="panel-scatter" class="panel"><div class="sh"><div class="st">Scatter Matrix</div><div class="sb">Top Features</div></div><div id="smc"></div></div>
+
+  <!-- NEW: Leakage Detection -->
+  <div id="panel-leakage" class="panel"><div class="sh"><div class="st">🚨 Data Leakage Detection</div></div><div id="lkc"></div></div>
+
+  <div id="panel-target" class="panel"><div class="sh"><div class="st">Target Analizi</div></div><div id="tgc"></div></div>
+  <div id="panel-drift" class="panel"><div class="sh"><div class="st">Train vs Test Drift</div><div class="sb">KS-test</div></div><div id="drc"></div></div>
+
+  <!-- NEW: Memory Optimization -->
+  <div id="panel-memory" class="panel"><div class="sh"><div class="st">💾 Memory Optimization</div></div><div id="memc"></div></div>
+
+  <div id="panel-fe" class="panel"><div class="sh"><div class="st">Feature Engineering</div></div><div id="fec"></div></div>
+  <div id="panel-report" class="panel"><div class="sh"><div class="st">Yönetim Raporu</div><button class="btn btn-p" onclick="dlReport()" style="margin-left:auto">📥 İndir</button><button class="btn btn-s" onclick="window.print()" style="margin-left:8px">🖨️</button></div><div id="rpc"></div></div>
+</div></div>
+
+<script>
+/* ================================================================ */
+var S={train:null,test:null,target:'',idCol:'',num:[],cat:[],dt:[],ptype:null};
+var PC={responsive:true,displayModeBar:false};
+var C8=['#2563eb','#dc2626','#059669','#d97706','#7c3aed','#db2777','#0891b2','#65a30d'];
+
+function DL(e){var b={paper_bgcolor:'#ffffff',plot_bgcolor:'#fafaf7',font:{color:'#1a1a1a',family:'Inter',size:13},xaxis:{gridcolor:'#e5e5e0',linecolor:'#d5d0c8',zerolinecolor:'#d5d0c8',tickfont:{size:11,color:'#4b5563'}},yaxis:{gridcolor:'#e5e5e0',linecolor:'#d5d0c8',zerolinecolor:'#d5d0c8',tickfont:{size:11,color:'#4b5563'}},margin:{t:70,b:60,l:60,r:30},showlegend:false};if(!e)return b;Object.keys(e).forEach(function(k){if(typeof e[k]==='object'&&!Array.isArray(e[k])&&b[k]&&typeof b[k]==='object'){var m={};Object.keys(b[k]).forEach(function(j){m[j]=b[k][j];});Object.keys(e[k]).forEach(function(j){m[j]=e[k][j];});b[k]=m;}else b[k]=e[k];});return b;}
+function ch(id,tr,ly){try{if(!document.getElementById(id))return;Plotly.newPlot(id,tr,ly||DL(),PC);}catch(e){console.error(id,e);}}
+
+/* INIT */
+document.addEventListener('DOMContentLoaded',function(){w('dz-tr','f-tr',0);w('dz-te','f-te',1);});
+function w(dz,f,isT){var d=document.getElementById(dz),fi=document.getElementById(f);if(!d||!fi)return;d.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();fi.value='';fi.click();});fi.addEventListener('click',function(e){e.stopPropagation();});fi.addEventListener('change',function(){if(this.files[0])parseCSV(this.files[0],isT);});d.addEventListener('dragover',function(e){e.preventDefault();d.classList.add('drag-over');});d.addEventListener('dragleave',function(){d.classList.remove('drag-over');});d.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();d.classList.remove('drag-over');if(e.dataTransfer.files[0])parseCSV(e.dataTransfer.files[0],isT);});}
+
+function go(id){document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active');});document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('active');});document.getElementById('panel-'+id).classList.add('active');document.querySelectorAll('.ni').forEach(function(n){var o=n.getAttribute('onclick');if(o&&o.indexOf("'"+id+"'")!==-1)n.classList.add('active');});if(!S.train)return;var fn={overview:rOv,missing:rMiss,numeric:rNum,categorical:rCat,corr:rCorr,outlier:rOut,importance:rImp,scatter:rScatter,leakage:rLeak,target:rTgt,drift:rDrift,memory:rMem,fe:rFE,report:rReport};if(fn[id])try{fn[id]();}catch(e){console.error(id,e);}}
+function sl(m){document.getElementById('lt').textContent=m||'...';document.getElementById('lo').classList.add('show');}
+function hl(){document.getElementById('lo').classList.remove('show');}
+
+/* CSV */
+function parseCSV(file,isT){sl((isT?'Test':'Train')+' CSV...');Papa.parse(file,{header:true,dynamicTyping:true,skipEmptyLines:true,complete:function(r){hl();if(isT){S.test=r.data;mDZ('dz-te',r.data.length,r.meta.fields.length);}else{S.train=r.data;S.target=document.getElementById('cfg-t').value.trim()||dTgt(r.meta.fields);S.idCol=document.getElementById('cfg-i').value.trim()||dId(r.meta.fields);dTypes();S.ptype=dPT();mDZ('dz-tr',S.train.length,r.meta.fields.length);pSel();rLoad();}},error:function(e){hl();alert(e.message);}});}
+function mDZ(id,r,c){var d=document.getElementById(id);d.classList.add('loaded');d.querySelector('.di').textContent='✅';d.querySelector('.dtl').textContent=r.toLocaleString()+' satır';d.querySelector('.dsb').textContent=c+' sütun'+(id==='dz-tr'?' · Target: '+S.target:'');}
+function dTgt(f){var kw=['target','label','churn','survived','saleprice','price','fraud','default','outcome','y'];for(var i=0;i<kw.length;i++){var m=f.find(function(x){return x.toLowerCase()===kw[i];});if(m)return m;}for(var j=0;j<kw.length;j++){var m2=f.find(function(x){return x.toLowerCase().indexOf(kw[j])!==-1;});if(m2)return m2;}return f[f.length-1];}
+function dId(f){var kw=['id','index','idx','row_id'];for(var i=0;i<kw.length;i++){var m=f.find(function(x){return x.toLowerCase()===kw[i];});if(m)return m;}return '';}
+function dTypes(){var exc=new Set([S.target,S.idCol].filter(Boolean));S.num=[];S.cat=[];S.dt=[];if(!S.train||!S.train.length)return;Object.keys(S.train[0]).forEach(function(c){if(exc.has(c))return;var v=S.train.slice(0,500).map(function(r){return r[c];}).filter(function(x){return x!=null&&x!=='';});if(!v.length){S.cat.push(c);return;}var nv=v.filter(function(x){return typeof x==='number'&&!isNaN(x);});if(nv.length/v.length>.7){var u=new Set(v).size;if(u<12&&u/v.length<.05)S.cat.push(c);else S.num.push(c);}else{if(/^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}/.test(String(v[0])))S.dt.push(c);else S.cat.push(c);}});}
+function dPT(){if(!S.target||!S.train||!S.train.length)return null;var v=S.train.map(function(r){return r[S.target];}).filter(function(x){return x!=null;});if(!v.length)return null;var u=new Set(v).size;return(typeof v[0]==='string'||u<=20||u/v.length<.05)?'classification':'regression';}
+function pSel(){document.getElementById('ns').innerHTML=S.num.map(function(c){return'<option>'+c+'</option>';}).join('');document.getElementById('cs').innerHTML=S.cat.map(function(c){return'<option>'+c+'</option>';}).join('');}
+
+/* HELPERS */
+function B(l,v,s){return'<div class="sbox"><div class="sl">'+l+'</div><div class="sv">'+v+'</div>'+(s?'<div class="ss">'+s+'</div>':'')+'</div>';}
+function bT(f,r){return'<table><thead><tr>'+f.map(function(c){return'<th>'+c+'</th>';}).join('')+'</tr></thead><tbody>'+r.map(function(row){return'<tr>'+f.map(function(c){var v=row[c];return'<td>'+(v!=null?String(v):'')+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table>';}
+function vc2(arr){var m={};arr.forEach(function(v){var k=String(v);m[k]=(m[k]||0)+1;});return Object.keys(m).map(function(k){return{k:k,v:m[k]};}).sort(function(a,b){return b.v-a.v;});}
+function uV(a){var s={};return a.filter(function(v){var k=String(v);if(s[k])return false;s[k]=1;return true;}).map(String);}
+function cM(){if(!S.train||!S.train.length)return{total:0,cols:0};var t=0,c=0;Object.keys(S.train[0]).forEach(function(col){var n=0;for(var i=0;i<S.train.length;i++){if(S.train[i][col]==null||S.train[i][col]==='')n++;}if(n>0){t+=n;c++;}});return{total:t,cols:c};}
+function cD(){if(!S.train)return 0;var sub=S.train.slice(0,20000);var ss=sub.map(function(r){return JSON.stringify(r);});return ss.length-new Set(ss).size;}
+function gn(df,c){var r=[];for(var i=0;i<df.length;i++){var v=df[i][c];if(typeof v==='number'&&!isNaN(v))r.push(v);}return r;}
+function sp(a,mx){if(a.length<=mx)return a;var st=Math.ceil(a.length/mx),r=[];for(var i=0;i<a.length;i+=st)r.push(a[i]);return r;}
+function av(a){if(!a.length)return 0;var s=0;for(var i=0;i<a.length;i++)s+=a[i];return s/a.length;}
+function sd(a,m){if(!a.length)return 0;var s=0;for(var i=0;i<a.length;i++)s+=(a[i]-m)*(a[i]-m);return Math.sqrt(s/a.length);}
+function sk(a,m,s){if(!s)return 0;var r=0;for(var i=0;i<a.length;i++)r+=Math.pow((a[i]-m)/s,3);return r/a.length;}
+function pr(x,y){var n=Math.min(x.length,y.length);if(n<2)return 0;var mx=0,my=0;for(var i=0;i<n;i++){mx+=x[i];my+=y[i];}mx/=n;my/=n;var nm=0,dx=0,dy=0;for(var j=0;j<n;j++){nm+=(x[j]-mx)*(y[j]-my);dx+=(x[j]-mx)*(x[j]-mx);dy+=(y[j]-my)*(y[j]-my);}return(dx*dy)===0?0:nm/Math.sqrt(dx*dy);}
+function le(df,c){var v=df.map(function(r){return r[c];});var nn=v.filter(function(x){return x!=null&&x!=='';});var nN=nn.filter(function(x){return typeof x==='number'&&!isNaN(x);}).length;if(nN/nn.length>.7)return v.map(function(x){return typeof x==='number'&&!isNaN(x)?x:NaN;});var map={},cnt=0;nn.forEach(function(x){var k=String(x);if(map[k]===undefined)map[k]=cnt++;});return v.map(function(x){return(x!=null&&x!==''&&map[String(x)]!==undefined)?map[String(x)]:NaN;});}
+function ksTest(a,b){if(!a.length||!b.length)return 0;var c=[];for(var i=0;i<a.length;i++)c.push({v:a[i],s:0});for(var j=0;j<b.length;j++)c.push({v:b[j],s:1});c.sort(function(x,y){return x.v-y.v;});var n1=a.length,n2=b.length,c1=0,c2=0,mx=0;for(var k=0;k<c.length;k++){if(c[k].s===0)c1+=1/n1;else c2+=1/n2;var d=Math.abs(c1-c2);if(d>mx)mx=d;}return mx;}
+
+/* NEW: Cramér's V — measures association between two categorical variables */
+function cramersV(a,b){
+  if(!a.length||a.length!==b.length)return 0;
+  var n=a.length;
+  // Build contingency table
+  var rows={},cols={},ct={};
+  for(var i=0;i<n;i++){
+    var r=String(a[i]),c=String(b[i]);
+    if(a[i]==null||b[i]==null||a[i]===''||b[i]==='')continue;
+    rows[r]=1;cols[c]=1;
+    var key=r+'|||'+c;
+    ct[key]=(ct[key]||0)+1;
+  }
+  var rk=Object.keys(rows),ck=Object.keys(cols);
+  var R=rk.length,C=ck.length;
+  if(R<2||C<2)return 0;
+  // Row/col totals
+  var rTot={},cTot={},total=0;
+  rk.forEach(function(r){rTot[r]=0;});
+  ck.forEach(function(c){cTot[c]=0;});
+  Object.keys(ct).forEach(function(key){var parts=key.split('|||');rTot[parts[0]]+=ct[key];cTot[parts[1]]+=ct[key];total+=ct[key];});
+  if(!total)return 0;
+  // Chi-square
+  var chi2=0;
+  rk.forEach(function(r){ck.forEach(function(c){
+    var obs=ct[r+'|||'+c]||0;
+    var exp=(rTot[r]*cTot[c])/total;
+    if(exp>0)chi2+=Math.pow(obs-exp,2)/exp;
+  });});
+  var minDim=Math.min(R,C)-1;
+  if(minDim<1)return 0;
+  return Math.sqrt(chi2/(total*minDim));
+}
+
+/* NEW: Approximate Mutual Information (discretized) */
+function approxMI(numArr,targetArr){
+  // Discretize numeric into 10 bins
+  var valid=[];
+  for(var i=0;i<numArr.length;i++){
+    if(!isNaN(numArr[i])&&targetArr[i]!=null&&targetArr[i]!=='')
+      valid.push({x:numArr[i],y:String(targetArr[i])});
+  }
+  if(valid.length<20)return 0;
+  var xs=valid.map(function(v){return v.x;});
+  xs.sort(function(a,b){return a-b;});
+  var bins=10,edges=[];
+  for(var b=0;b<=bins;b++)edges.push(xs[Math.min(Math.floor(b*xs.length/bins),xs.length-1)]);
+  function getBin(v){for(var i=0;i<bins;i++){if(v<=edges[i+1]||i===bins-1)return i;}return bins-1;}
+
+  var n=valid.length,joint={},xm={},ym={};
+  var yKeys={};
+  valid.forEach(function(v){
+    var bx=getBin(v.x),by=v.y;
+    yKeys[by]=1;
+    var key=bx+'_'+by;
+    joint[key]=(joint[key]||0)+1;
+    xm[bx]=(xm[bx]||0)+1;
+    ym[by]=(ym[by]||0)+1;
+  });
+  var mi=0;
+  Object.keys(joint).forEach(function(key){
+    var parts=key.split('_'),bx=parts[0],by=parts.slice(1).join('_');
+    var pxy=joint[key]/n, px=xm[bx]/n, py=ym[by]/n;
+    if(pxy>0&&px>0&&py>0) mi+=pxy*Math.log(pxy/(px*py));
+  });
+  return Math.max(0,mi);
+}
+
+function probit(p){if(p<=0)return-8;if(p>=1)return 8;var a=[-39.697,220.946,-275.929,138.358,-30.665,2.507],b=[-54.476,161.586,-155.699,66.801,-13.281],cc=[-.00778,-.3224,-2.40076,-2.54973,4.37466,2.93816],d=[.00778,.32247,2.44513,3.75441];if(p<.02425){var q=Math.sqrt(-2*Math.log(p));return(((((cc[0]*q+cc[1])*q+cc[2])*q+cc[3])*q+cc[4])*q+cc[5])/(((d[0]*q+d[1])*q+d[2])*q+d[3]);}if(p<=.97575){var q2=p-.5,r=q2*q2;return(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q2/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}var q3=Math.sqrt(-2*Math.log(1-p));return-(((((cc[0]*q3+cc[1])*q3+cc[2])*q3+cc[3])*q3+cc[4])*q3+cc[5])/(((d[0]*q3+d[1])*q3+d[2])*q3+d[3]);}
+function outCols(df){return S.num.filter(function(c){var v=gn(df,c);if(v.length<5)return false;var s2=v.slice().sort(function(a,b){return a-b;});var q1=s2[Math.floor(v.length*.25)],q3=s2[Math.floor(v.length*.75)],iqr=q3-q1;return v.filter(function(x){return x<q1-1.5*iqr||x>q3+1.5*iqr;}).length/v.length>.05;});}
+function skCols(df){return S.num.filter(function(c){var v=gn(df,c);if(v.length<5)return false;var m=av(v);return Math.abs(sk(v,m,sd(v,m)))>1;});}
+function hcCols(df){return S.cat.filter(function(c){return new Set(df.map(function(r){return r[c];}).filter(function(v){return v!=null;})).size>20;});}
+
+/* ================================================================
+   LOAD RESULT
+================================================================ */
+function rLoad(){var df=S.train,n=df.length,nc=Object.keys(df[0]||{}).length,miss=cM(),dups=cD();document.getElementById('lr').style.display='block';document.getElementById('ls').innerHTML=B('Satır',n.toLocaleString(),S.num.length+'n · '+S.cat.length+'c')+B('Sütun',nc,S.dt.length+' date')+B('Eksik',miss.total.toLocaleString(),miss.cols+' col')+B('Duplike',dups.toLocaleString(),dups>0?'⚠️':'✅');document.getElementById('pt').innerHTML=bT(Object.keys(df[0]),df.slice(0,25));var flds=Object.keys(df[0]),schema=flds.map(function(c){var mn=0;for(var i=0;i<Math.min(df.length,1000);i++){if(df[i][c]==null||df[i][c]==='')mn++;}var tot=Math.min(df.length,1000);var role=c===S.target?'target':c===S.idCol?'id':S.num.indexOf(c)!==-1?'num':S.cat.indexOf(c)!==-1?'cat':S.dt.indexOf(c)!==-1?'dt':'?';var tc={target:'t-t',id:'t-id',num:'t-n',cat:'t-c',dt:'t-d','?':'t-id'};return'<tr><td>'+c+'</td><td><span class="tag '+(tc[role]||'')+'">'+role+'</span></td><td>'+mn+'</td><td>'+((mn/tot)*100).toFixed(1)+'%</td><td>'+new Set(df.slice(0,1000).map(function(r){return r[c];}).filter(function(v){return v!=null;})).size+'</td></tr>';}).join('');document.getElementById('st2').innerHTML='<table><thead><tr><th>Sütun</th><th>Rol</th><th>Eksik</th><th>%</th><th>Unique</th></tr></thead><tbody>'+schema+'</tbody></table>';}
+
+/* OVERVIEW */
+function rOv(){if(!S.train)return;var df=S.train,n=df.length,f=Object.keys(df[0]||{});document.getElementById('ob').textContent=n.toLocaleString()+' × '+f.length;var td=[{l:'Sayısal',c:S.num.length,cl:'#2563eb'},{l:'Kategorik',c:S.cat.length,cl:'#7c3aed'},{l:'Tarih',c:S.dt.length,cl:'#059669'},{l:'Diğer',c:f.length-S.num.length-S.cat.length-S.dt.length,cl:'#d97706'}].filter(function(d){return d.c>0;});var miss=cM(),dups=cD(),tV=S.target?df.map(function(r){return r[S.target];}).filter(function(v){return v!=null;}):[];var tVC=vc2(tV);
+document.getElementById('oc').innerHTML='<div class="g4" style="margin-bottom:18px">'+B('Satır',n.toLocaleString(),'')+B('Sütun',f.length,'')+B('Eksik',miss.total.toLocaleString(),'')+B('Duplike',dups.toLocaleString(),'')+'</div><div class="g2"><div class="card"><div class="ct">Sütun Tipleri</div><div id="ot" class="cb" style="min-height:280px"></div></div><div class="card"><div class="ct">Target: '+S.target+'</div><div id="otg" class="cb" style="min-height:280px"></div></div></div>';
+ch('ot',[{type:'pie',labels:td.map(function(d){return d.l;}),values:td.map(function(d){return d.c;}),marker:{colors:td.map(function(d){return d.cl;})},hole:.5,textinfo:'label+value+percent',textfont:{color:'#1a1a1a',size:14}}],DL({margin:{t:20,b:20,l:20,r:20},showlegend:true,legend:{font:{size:13}}}));
+if(S.target&&tV.length){if(S.ptype==='classification'){var total=tV.length;ch('otg',[{type:'bar',x:tVC.map(function(d){return d.k;}),y:tVC.map(function(d){return d.v;}),marker:{color:tVC.map(function(_,i){return C8[i%C8.length];}),line:{color:'#fff',width:1.5}},text:tVC.map(function(d){return d.v.toLocaleString()+'\n('+((d.v/total)*100).toFixed(1)+'%)';}),textposition:'outside',textfont:{size:13,color:'#1a1a1a',family:'JetBrains Mono'},cliponaxis:false}],DL({margin:{t:80,b:60,l:60,r:30},xaxis:{title:S.target},yaxis:{title:'Adet'}}));}else{var nT=tV.filter(function(x){return typeof x==='number';});if(nT.length)ch('otg',[{type:'histogram',x:sp(nT,5000),nbinsx:50,marker:{color:'#2563eb',opacity:.85,line:{color:'#fff',width:1}}}],DL({xaxis:{title:S.target}}));}}}
+
+/* MISSING */
+function rMiss(){if(!S.train)return;var df=S.train,rows=[];Object.keys(df[0]||{}).forEach(function(c){var m=0;for(var i=0;i<df.length;i++){if(df[i][c]==null||df[i][c]==='')m++;}if(m>0)rows.push({c:c,m:m,p:m/df.length*100});});rows.sort(function(a,b){return b.m-a.m;});if(!rows.length){document.getElementById('mc').innerHTML='<div class="al al-s">✅ Eksik değer yok!</div>';return;}
+document.getElementById('mc').innerHTML='<div class="al al-w">⚠️ '+rows.length+' sütunda '+rows.reduce(function(a,r){return a+r.m;},0).toLocaleString()+' eksik</div><div class="card"><div class="ct">Eksik Oranı</div><div id="mb" class="cb"></div></div><div class="card"><div class="ct">Strateji</div><table><thead><tr><th>Sütun</th><th>N</th><th>%</th><th>Öneri</th></tr></thead><tbody>'+rows.map(function(r){var act=r.p>50?'🗑️ Drop':r.p>20?'🔄 KNN':r.p>5?'📊 Median':'📌 Mean';return'<tr><td>'+r.c+'</td><td>'+r.m.toLocaleString()+'</td><td><span class="tag '+(r.p>50?'t-e':r.p>20?'t-w':'t-t')+'">'+r.p.toFixed(1)+'%</span></td><td>'+act+'</td></tr>';}).join('')+'</tbody></table></div>';
+ch('mb',[{type:'bar',x:rows.map(function(r){return r.c;}),y:rows.map(function(r){return r.p;}),marker:{color:rows.map(function(r){return r.p>50?'#dc2626':r.p>20?'#d97706':'#2563eb';})},text:rows.map(function(r){return r.p.toFixed(1)+'%';}),textposition:'outside',textfont:{size:13,color:'#1a1a1a'},cliponaxis:false}],DL({margin:{t:80,b:100,l:60,r:30},xaxis:{tickangle:-45},yaxis:{title:'%'}}));}
+
+/* NUMERIC */
+function rNum(){var c=document.getElementById('ns').value;if(!c||!S.train)return;var v=gn(S.train,c);if(!v.length)return;var n=v.length,so=v.slice().sort(function(a,b){return a-b;}),m=av(v),s=sd(v,m),q1=so[Math.floor(n*.25)],md=so[Math.floor(n*.5)],q3=so[Math.floor(n*.75)],iqr=q3-q1,lo=q1-1.5*iqr,hi=q3+1.5*iqr,ot=v.filter(function(x){return x<lo||x>hi;}),skv=sk(v,m,s),sv=sp(v,5000);
+document.getElementById('nc').innerHTML='<div class="g4" style="margin-bottom:18px">'+B('Mean',m.toFixed(4),'std: '+s.toFixed(4))+B('Median',md.toFixed(3),'IQR: '+iqr.toFixed(3))+B('Skew',skv.toFixed(3),Math.abs(skv)>1?'⚠️':'✅')+B('Outlier',(ot.length/n*100).toFixed(1)+'%',ot.length)+'</div><div class="g2" style="margin-bottom:18px"><div class="card"><div class="ct">Histogram</div><div id="nh" class="cb"></div></div><div class="card"><div class="ct">Box Plot</div><div id="nb" class="cb"></div></div></div><div class="g2"><div class="card"><div class="ct">Violin</div><div id="nv" class="cb"></div></div><div class="card"><div class="ct">🎯 Target</div><div id="nt" class="cb"></div></div></div>';
+ch('nh',[{type:'histogram',x:sv,nbinsx:50,marker:{color:'#2563eb',opacity:.85,line:{color:'#fff',width:1}}}],DL({xaxis:{title:c}}));ch('nb',[{type:'box',y:sv,name:c,boxmean:'sd',marker:{color:'#2563eb'},line:{color:'#1d4ed8'}}],DL({shapes:[{type:'line',x0:0,x1:1,xref:'paper',y0:hi,y1:hi,line:{color:'#dc2626',dash:'dash',width:2}},{type:'line',x0:0,x1:1,xref:'paper',y0:lo,y1:lo,line:{color:'#dc2626',dash:'dash',width:2}}]}));ch('nv',[{type:'violin',y:sv,name:c,box:{visible:true},meanline:{visible:true},fillcolor:'rgba(37,99,235,.15)',line:{color:'#2563eb'}}],DL());
+if(S.target){var ps=S.train.filter(function(r){return typeof r[c]==='number'&&!isNaN(r[c])&&r[S.target]!=null;});var sp2=sp(ps,3000);if(S.ptype==='classification'){var cls=uV(ps.map(function(r){return r[S.target];}));ch('nt',cls.map(function(cv,ci){return{type:'box',y:sp2.filter(function(r){return String(r[S.target])===cv;}).map(function(r){return r[c];}),name:cv,marker:{color:C8[ci%C8.length]},boxmean:'sd'};}),DL({showlegend:true,legend:{font:{size:12}}}));}else{ch('nt',[{type:'scatter',x:sp2.map(function(r){return r[c];}),y:sp2.map(function(r){return r[S.target];}),mode:'markers',marker:{size:4,opacity:.4,color:'#2563eb'}}],DL({xaxis:{title:c},yaxis:{title:S.target}}));}}}
+
+/* CATEGORICAL */
+function rCat(){var c=document.getElementById('cs').value;if(!c||!S.train)return;var v=S.train.map(function(r){return r[c];}).filter(function(x){return x!=null&&x!=='';});var vcs=vc2(v),total=v.length,topVc=vcs.slice(0,20);
+document.getElementById('cc').innerHTML='<div class="g4" style="margin-bottom:18px">'+B('Unique',vcs.length,'')+B('Mode',vcs[0]?vcs[0].k:'?',vcs[0]?((vcs[0].v/total)*100).toFixed(1)+'%':'')+B('Eksik',(S.train.length-total).toLocaleString(),'')+B('Encoding',vcs.length<=5?'OneHot':vcs.length<=20?'Label':'Target','')+'</div><div class="g2"><div class="card"><div class="ct">Bar (Top 20)</div><div id="cb2" class="cb"></div></div><div class="card"><div class="ct">🎯 Target</div><div id="ct3" class="cb"></div></div></div>';
+ch('cb2',[{type:'bar',x:topVc.map(function(d){return d.k;}),y:topVc.map(function(d){return d.v;}),text:topVc.map(function(d){return d.v.toLocaleString()+'\n'+((d.v/total)*100).toFixed(1)+'%';}),textposition:'outside',textfont:{size:12,color:'#1a1a1a'},cliponaxis:false,marker:{color:topVc.map(function(_,i){return'hsl('+(210+i*12)+',65%,50%)';})}}],DL({margin:{t:80,b:100,l:60,r:30},xaxis:{tickangle:-45}}));
+if(S.target){var t10=vcs.slice(0,10).map(function(d){return d.k;}),fl=S.train.filter(function(r){return t10.indexOf(String(r[c]))!==-1&&r[S.target]!=null;});if(S.ptype==='classification'){var cls=uV(S.train.map(function(r){return r[S.target];}).filter(function(x){return x!=null;}));var ct4={};t10.forEach(function(k){ct4[k]={};cls.forEach(function(cv){ct4[k][cv]=0;});});fl.forEach(function(r){var key=String(r[c]);if(ct4[key])ct4[key][String(r[S.target])]=(ct4[key][String(r[S.target])]||0)+1;});ch('ct3',cls.map(function(cv,ci){return{type:'bar',name:cv,x:t10,y:t10.map(function(k){return ct4[k][cv]||0;}),marker:{color:C8[ci%C8.length]}};}),DL({barmode:'stack',xaxis:{tickangle:-30},showlegend:true,legend:{font:{size:12}}}));}else{ch('ct3',t10.map(function(k){return{type:'box',y:fl.filter(function(r){return String(r[c])===k;}).map(function(r){return r[S.target];}),name:k,boxmean:'sd'};}),DL({xaxis:{tickangle:-30}}));}}}
+
+/* CORRELATION */
+function rCorr(){if(!S.train)return;var mx=parseInt(document.getElementById('cm').value),cols=S.num.slice(0,mx);var hT=false;if(S.target&&cols.indexOf(S.target)===-1){cols.push(S.target);hT=true;}if(cols.length<2)return;sl('Korelasyon...');setTimeout(function(){try{var df=sp(S.train,5000),cA={};cols.forEach(function(c){cA[c]=le(df,c);});var dL=cols.map(function(c){return c===S.target?'🎯'+c:c;});var mt=[];for(var i=0;i<cols.length;i++){mt[i]=[];for(var j=0;j<cols.length;j++){if(i===j){mt[i][j]=1;continue;}if(j<i){mt[i][j]=mt[j][i];continue;}var x=[],y=[];var ai=cA[cols[i]],aj=cA[cols[j]];for(var k=0;k<ai.length;k++){if(!isNaN(ai[k])&&!isNaN(aj[k])){x.push(ai[k]);y.push(aj[k]);}}mt[i][j]=x.length<5?0:pr(x,y);}}var pairs=[];for(var pi=0;pi<cols.length;pi++)for(var pj=pi+1;pj<cols.length;pj++)pairs.push({a:cols[pi],b:cols[pj],r:mt[pi][pj]});pairs.sort(function(a,b){return Math.abs(b.r)-Math.abs(a.r);});var tP=hT?pairs.filter(function(p){return p.a===S.target||p.b===S.target;}).slice(0,10):[];
+var tH='';if(tP.length){tH='<div class="card" style="margin-bottom:18px"><div class="ct">🎯 Target Korelasyonları</div><table><thead><tr><th>Feature</th><th>r</th><th>|r|</th><th>Yön</th></tr></thead><tbody>'+tP.map(function(p){var o=p.a===S.target?p.b:p.a;var ar=Math.abs(p.r);return'<tr><td style="font-weight:600">'+o+'</td><td style="color:'+(ar>.5?'var(--danger)':ar>.3?'var(--warn)':'var(--accent3)')+';font-weight:700">'+p.r.toFixed(4)+'</td><td>'+ar.toFixed(4)+'</td><td>'+(p.r>0?'📈':'📉')+'</td></tr>';}).join('')+'</tbody></table></div>';}
+document.getElementById('crc').innerHTML='<div class="card" style="margin-bottom:18px"><div class="ct">Matris ('+cols.length+'×'+cols.length+')</div><div id="chm" style="width:100%;min-height:550px"></div></div>'+tH;
+ch('chm',[{type:'heatmap',z:mt,x:dL,y:dL,colorscale:[[0,'#1e40af'],[.3,'#60a5fa'],[.5,'#fafaf7'],[.7,'#f87171'],[1,'#991b1b']],zmin:-1,zmax:1,showscale:true,text:mt.map(function(r){return r.map(function(v){return v.toFixed(2);});}),texttemplate:'%{text}',textfont:{size:10,color:'#1a1a1a'}}],DL({margin:{t:30,b:140,l:140,r:40},xaxis:{tickangle:-45,tickfont:{size:10}},yaxis:{tickfont:{size:10}}}));}catch(e){document.getElementById('crc').innerHTML='<div class="al al-w">'+e.message+'</div>';}hl();},50);}
+
+/* OUTLIER */
+function rOut(){if(!S.train)return;var df=S.train,cols=S.num.slice(0,20);var stats=cols.map(function(c){var v=gn(df,c);if(!v.length)return null;var s2=v.slice().sort(function(a,b){return a-b;});var q1=s2[Math.floor(v.length*.25)],q3=s2[Math.floor(v.length*.75)],iqr=q3-q1,lo=q1-1.5*iqr,hi=q3+1.5*iqr;var out=v.filter(function(x){return x<lo||x>hi;});return{c:c,n:out.length,p:out.length/v.length*100};}).filter(Boolean).sort(function(a,b){return b.p-a.p;});
+document.getElementById('olc').innerHTML='<div class="card"><div class="ct">Outlier Özeti</div><div id="obar" class="cb"></div></div><div class="card"><div class="ct">Box Karşılaştırma</div><div id="obox" class="cb" style="min-height:400px"></div></div>';
+ch('obar',[{type:'bar',x:stats.map(function(s){return s.c;}),y:stats.map(function(s){return s.p;}),text:stats.map(function(s){return s.p.toFixed(1)+'%';}),textposition:'outside',textfont:{size:13,color:'#1a1a1a'},cliponaxis:false,marker:{color:stats.map(function(s){return s.p>10?'#dc2626':s.p>5?'#d97706':'#059669';})}}],DL({margin:{t:80,b:100,l:60,r:30},xaxis:{tickangle:-30},yaxis:{title:'%'}}));
+ch('obox',stats.slice(0,10).map(function(s){return{type:'box',y:sp(gn(df,s.c),800),name:s.c};}),DL({boxmode:'group'}));}
+
+/* ================================================================
+   NEW: FEATURE IMPORTANCE — Pearson + Cramér's V + MI
+================================================================ */
+function rImp(){
+  if(!S.train||!S.target){document.getElementById('fic').innerHTML='<div class="al al-w">Target gerekli</div>';return;}
+  sl('Feature importance hesaplanıyor...');
+  setTimeout(function(){
+    var df=S.train, tgtVals=df.map(function(r){return r[S.target];});
+    var tgtEncoded=le(df,S.target);
+    var results=[];
+
+    // Numeric features → |Pearson r| + MI
+    S.num.forEach(function(c){
+      var vals=gn(df,c);
+      var tgtN=[];var vN=[];
+      for(var i=0;i<df.length;i++){
+        if(typeof df[i][c]==='number'&&!isNaN(df[i][c])&&!isNaN(tgtEncoded[i])){
+          vN.push(df[i][c]);tgtN.push(tgtEncoded[i]);
+        }
+      }
+      var r=vN.length>5?Math.abs(pr(vN,tgtN)):0;
+      var mi=approxMI(df.map(function(row){return row[c];}),tgtVals);
+      results.push({c:c,type:'num',pearson:r,cramersv:null,mi:mi,combined:r*0.4+mi*0.6});
+    });
+
+    // Categorical features → Cramér's V + MI
+    S.cat.forEach(function(c){
+      var catVals=df.map(function(r){return r[c];});
+      var cv=cramersV(catVals,tgtVals);
+      var encoded=le(df,c);
+      var mi=approxMI(encoded,tgtVals);
+      results.push({c:c,type:'cat',pearson:null,cramersv:cv,mi:mi,combined:cv*0.4+mi*0.6});
+    });
+
+    results.sort(function(a,b){return b.combined-a.combined;});
+    var top30=results.slice(0,30);
+
+    document.getElementById('fic').innerHTML=
+      '<div class="cd">Bu panel her feature\'ın target ile ilişkisini 3 yöntemle ölçer: <strong>|Pearson r|</strong> (sayısal, lineer), <strong>Cramér\'s V</strong> (kategorik, chi-square tabanlı), <strong>Mutual Information</strong> (non-lineer, tüm tipler). Combined skor: 40% correlation + 60% MI.</div>'+
+      '<div class="card" style="margin-top:18px"><div class="ct">Feature Importance Ranking (Top 30)</div><div id="fi-bar" class="cb" style="min-height:500px"></div></div>'+
+      '<div class="card"><div class="ct">Detay Tablosu</div><div class="tw"><table><thead><tr><th>#</th><th>Feature</th><th>Tip</th><th>|Pearson|</th><th>Cramér\'s V</th><th>MI</th><th>Combined</th><th>Yorum</th></tr></thead><tbody>'+
+      top30.map(function(r,i){
+        var comment=r.combined>.3?'🔥 Güçlü':r.combined>.15?'👍 Orta':r.combined>.05?'📊 Zayıf':'⚪ Çok zayıf';
+        return'<tr><td>'+(i+1)+'</td><td style="font-weight:600">'+r.c+'</td><td><span class="tag '+(r.type==='num'?'t-n':'t-c')+'">'+r.type+'</span></td>'+
+          '<td>'+(r.pearson!==null?r.pearson.toFixed(4):'—')+'</td>'+
+          '<td>'+(r.cramersv!==null?r.cramersv.toFixed(4):'—')+'</td>'+
+          '<td>'+r.mi.toFixed(4)+'</td>'+
+          '<td style="font-weight:700;color:'+(r.combined>.3?'var(--danger)':r.combined>.15?'var(--warn)':'var(--accent3)')+'">'+r.combined.toFixed(4)+'</td>'+
+          '<td>'+comment+'</td></tr>';
+      }).join('')+'</tbody></table></div></div>';
+
+    ch('fi-bar',[{type:'bar',
+      y:top30.map(function(r){return r.c;}).reverse(),
+      x:top30.map(function(r){return r.combined;}).reverse(),
+      orientation:'h',
+      marker:{color:top30.map(function(r){return r.type==='num'?'#2563eb':'#7c3aed';}).reverse(),line:{color:'#fff',width:1}},
+      text:top30.map(function(r){return r.combined.toFixed(3);}).reverse(),
+      textposition:'outside',textfont:{size:12,color:'#1a1a1a'},cliponaxis:false
+    }],DL({margin:{t:30,b:40,l:160,r:80},xaxis:{title:'Combined Score'},yaxis:{tickfont:{size:11}}}));
+    hl();
+  },50);
+}
+
+/* ================================================================
+   NEW: SCATTER MATRIX — Top correlated features
+================================================================ */
+function rScatter(){
+  if(!S.train||!S.target){document.getElementById('smc').innerHTML='<div class="al al-w">Target gerekli</div>';return;}
+  var df=S.train,tgtEnc=le(df,S.target);
+
+  // Find top 5 features by |correlation| with target
+  var corrs=S.num.map(function(c){
+    var v=gn(df,c),tN=[];var vN=[];
+    for(var i=0;i<df.length;i++){if(typeof df[i][c]==='number'&&!isNaN(df[i][c])&&!isNaN(tgtEnc[i])){vN.push(df[i][c]);tN.push(tgtEnc[i]);}}
+    return{c:c,r:vN.length>5?Math.abs(pr(vN,tN)):0};
+  }).sort(function(a,b){return b.r-a.r;});
+
+  var topCols=corrs.slice(0,5).map(function(d){return d.c;});
+  if(topCols.length<2){document.getElementById('smc').innerHTML='<div class="al al-w">En az 2 sayısal sütun gerekli</div>';return;}
+
+  var sampled=sp(df,1500);
+
+  document.getElementById('smc').innerHTML=
+    '<div class="cd">Target ile en yüksek korelasyona sahip top '+topCols.length+' feature arasındaki ikili scatter plot. Noktalar target değerine göre renklendirildi.</div>'+
+    '<div class="card" style="margin-top:18px"><div class="ct">Scatter Matrix ('+topCols.join(', ')+')</div><div id="sm-plot" style="width:100%;min-height:700px"></div></div>';
+
+  // Build SPLOM
+  var dims=topCols.map(function(c){return{label:c,values:sampled.map(function(r){return r[c];})};});
+  var colors=sampled.map(function(r){var v=r[S.target];return typeof v==='number'?v:0;});
+
+  ch('sm-plot',[{type:'splom',dimensions:dims,marker:{color:colors,colorscale:'Viridis',size:3,opacity:.5,showscale:true,colorbar:{title:S.target,titlefont:{size:12}}},diagonal:{visible:false}}],DL({margin:{t:40,b:40,l:40,r:40},showlegend:false}));
+}
+
+/* ================================================================
+   NEW: DATA LEAKAGE DETECTION
+================================================================ */
+function rLeak(){
+  if(!S.train||!S.target){document.getElementById('lkc').innerHTML='<div class="al al-w">Target gerekli</div>';return;}
+  sl('Leakage kontrol...');
+  setTimeout(function(){
+    var df=S.train,tgtEnc=le(df,S.target);
+    var results=[];
+
+    // Check numeric features for suspiciously high correlation
+    S.num.forEach(function(c){
+      var v=[];var t2=[];
+      for(var i=0;i<df.length;i++){if(typeof df[i][c]==='number'&&!isNaN(df[i][c])&&!isNaN(tgtEnc[i])){v.push(df[i][c]);t2.push(tgtEnc[i]);}}
+      var r=v.length>5?Math.abs(pr(v,t2)):0;
+      if(r>.95)results.push({c:c,type:'num',score:r,reason:'|r|='+r.toFixed(4)+' — Neredeyse mükemmel korelasyon → muhtemel leakage!'});
+      else if(r>.85)results.push({c:c,type:'num',score:r,reason:'|r|='+r.toFixed(4)+' — Çok yüksek korelasyon → leakage riski'});
+    });
+
+    // Check categorical: if any category perfectly predicts target
+    S.cat.forEach(function(c){
+      var cv=cramersV(df.map(function(r){return r[c];}),df.map(function(r){return r[S.target];}));
+      if(cv>.95)results.push({c:c,type:'cat',score:cv,reason:'Cramér\'s V='+cv.toFixed(4)+' — Neredeyse mükemmel ilişki → muhtemel leakage!'});
+      else if(cv>.85)results.push({c:c,type:'cat',score:cv,reason:'Cramér\'s V='+cv.toFixed(4)+' — Çok yüksek ilişki → leakage riski'});
+    });
+
+    // Check if any feature name suggests leakage
+    var suspiciousNames=['_target','_label','_result','_outcome','_pred','future_','next_'];
+    S.num.concat(S.cat).forEach(function(c){
+      suspiciousNames.forEach(function(kw){
+        if(c.toLowerCase().indexOf(kw)!==-1){
+          results.push({c:c,type:'name',score:.5,reason:'Şüpheli isim: "'+c+'" → gelecek bilgisi içerebilir'});
+        }
+      });
+    });
+
+    results.sort(function(a,b){return b.score-a.score;});
+
+    document.getElementById('lkc').innerHTML=
+      '<div class="cd wd">Data leakage modelin gerçek dünyada işe yaramamasının 1 numaralı sebebidir. Bu panel:<br>• |r| > 0.85 veya Cramér\'s V > 0.85 olan sütunları tespit eder<br>• Şüpheli sütun isimlerini kontrol eder<br>• Yarışmalarda submission öncesi mutlaka kontrol edin!</div>'+
+      (results.length===0?
+        '<div class="al al-s" style="margin-top:18px">✅ Leakage riski tespit edilmedi. Tüm feature-target ilişkileri makul seviyede.</div>':
+        '<div class="al al-d" style="margin-top:18px">🚨 '+results.length+' potansiyel leakage kaynağı tespit edildi!</div>'+
+        '<div class="card"><div class="ct">Leakage Uyarıları</div><table><thead><tr><th>Sütun</th><th>Tip</th><th>Skor</th><th>Açıklama</th></tr></thead><tbody>'+
+        results.map(function(r){return'<tr class="'+(r.score>.9?'leak-row':'')+'"><td style="font-weight:700">'+r.c+'</td><td><span class="tag '+(r.type==='num'?'t-n':r.type==='cat'?'t-c':'t-w')+'">'+r.type+'</span></td><td style="font-weight:700">'+r.score.toFixed(4)+'</td><td>'+r.reason+'</td></tr>';}).join('')+
+        '</tbody></table></div>'+
+        '<div class="card"><div class="ct">Tedavi Kodu</div><div class="cbl"># Leakage olan sütunları drop et\nleak_cols = '+JSON.stringify(results.filter(function(r){return r.score>.9;}).map(function(r){return r.c;}))+'\ndf.drop(columns=leak_cols, inplace=True)\n\n# UYARI: Bu sütunları hem train hem test\'ten kaldır!\n# Model eğitiminde ASLA kullanma!</div></div>');
+    hl();
+  },50);
+}
+
+/* TARGET */
+function rTgt(){if(!S.train||!S.target)return;var df=S.train,tV=df.map(function(r){return r[S.target];}).filter(function(v){return v!=null;});if(!tV.length)return;if(S.ptype==='classification'){var tVC=vc2(tV),total=tV.length;document.getElementById('tgc').innerHTML='<div class="card"><div class="ct">Target: '+S.target+' · <span class="tag t-t">Sınıflandırma</span></div><div class="g4" style="margin-bottom:12px">'+tVC.slice(0,8).map(function(d){return B(d.k,d.v.toLocaleString(),((d.v/total)*100).toFixed(1)+'%');}).join('')+'</div>'+(tVC[0].v/total>.75?'<div class="al al-w">⚠️ Dengesiz</div>':'<div class="al al-s">✅ Dengeli</div>')+'</div><div class="g2"><div class="card"><div class="ct">Dağılım</div><div id="td2" class="cb"></div></div><div class="card"><div class="ct">Feature × Target</div><div id="tn2" class="cb"></div></div></div>';ch('td2',[{type:'bar',x:tVC.map(function(d){return d.k;}),y:tVC.map(function(d){return d.v;}),text:tVC.map(function(d){return d.v.toLocaleString()+'\n('+((d.v/total)*100).toFixed(1)+'%)';}),textposition:'outside',textfont:{size:14,color:'#1a1a1a'},cliponaxis:false,marker:{color:tVC.map(function(_,i){return C8[i%C8.length];}),line:{color:'#fff',width:1.5}}}],DL({margin:{t:90,b:60,l:60,r:30}}));var topN=S.num.slice(0,6);if(topN.length)ch('tn2',tVC.slice(0,4).map(function(cls,ci){var sub=df.filter(function(r){return String(r[S.target])===cls.k;});return{type:'bar',name:cls.k,x:topN,y:topN.map(function(col){var v=gn(sub,col);return v.length?av(v):0;}),marker:{color:C8[ci%C8.length]}};}),DL({barmode:'group',showlegend:true,legend:{font:{size:12}}}));}else{var nT=tV.filter(function(x){return typeof x==='number';});if(!nT.length)return;var m=av(nT),s=sd(nT,m),skv=sk(nT,m,s);document.getElementById('tgc').innerHTML='<div class="card"><div class="ct">Target: '+S.target+' · <span class="tag t-t">Regresyon</span></div><div class="g4">'+B('Mean',m.toFixed(4),'')+B('Std',s.toFixed(4),'')+B('Skew',skv.toFixed(3),'')+B('N',nT.length.toLocaleString(),'')+'</div></div><div class="g2"><div class="card"><div class="ct">Dağılım</div><div id="td2" class="cb"></div></div><div class="card"><div class="ct">Log1p</div><div id="tl2" class="cb"></div></div></div>';var sv2=sp(nT,5000);ch('td2',[{type:'histogram',x:sv2,nbinsx:50,marker:{color:'#2563eb',opacity:.85,line:{color:'#fff',width:1}}}],DL({xaxis:{title:S.target}}));ch('tl2',[{type:'histogram',x:sv2.map(function(v){return Math.log1p(Math.max(v,0));}),nbinsx:50,marker:{color:'#059669',opacity:.85,line:{color:'#fff',width:1}}}],DL({xaxis:{title:'log1p('+S.target+')'}}));}}
+
+/* DRIFT */
+function rDrift(){if(!S.train){document.getElementById('drc').innerHTML='<div class="al al-i">Veri yükleyin</div>';return;}if(!S.test){document.getElementById('drc').innerHTML='<div class="al al-w">Test CSV yükleyin</div>';return;}var cN=S.num.filter(function(c){return S.test[0]&&S.test[0].hasOwnProperty(c);}).slice(0,12);var numD=cN.map(function(c){var trV=sp(gn(S.train,c),3000),teV=sp(gn(S.test,c),3000);if(!trV.length||!teV.length)return null;var trM=av(trV),teM=av(teV),trS=sd(trV,trM);var ks=ksTest(trV,teV),shift=Math.abs(trM-teM)/(trS||1);return{c:c,trM:trM,teM:teM,ks:ks,shift:shift,isDrift:ks>.1||shift>.5};}).filter(Boolean);
+document.getElementById('drc').innerHTML='<div class="g4" style="margin-bottom:18px">'+B('Train',S.train.length.toLocaleString(),'')+B('Test',S.test.length.toLocaleString(),'')+B('Kontrol',cN.length+' sütun','')+B('Drift',numD.filter(function(d){return d.isDrift;}).length,'⚠️')+'</div><div class="card"><div class="ct">KS Test + Mean Shift</div><table><thead><tr><th>Sütun</th><th>Train μ</th><th>Test μ</th><th>Δ/σ</th><th>KS</th><th>Durum</th></tr></thead><tbody>'+numD.map(function(d){return'<tr><td>'+d.c+'</td><td>'+d.trM.toFixed(4)+'</td><td>'+d.teM.toFixed(4)+'</td><td style="font-weight:700;color:'+(d.shift>.5?'var(--danger)':'var(--accent3)')+'">'+d.shift.toFixed(3)+'</td><td style="font-weight:700;color:'+(d.ks>.1?'var(--danger)':'var(--accent3)')+'">'+d.ks.toFixed(4)+'</td><td><span class="tag '+(d.isDrift?'t-e':'t-ok')+'">'+(d.isDrift?'⚠️':'✅')+'</span></td></tr>';}).join('')+'</tbody></table></div><div class="card"><div class="ct">Dağılım (Top 6)</div><div class="g2" style="margin-top:14px">'+cN.slice(0,6).map(function(c,i){return'<div><div style="font-size:12px;font-weight:700;color:var(--dim);margin-bottom:6px">'+c+'</div><div id="dr-'+i+'" class="cb" style="min-height:220px"></div></div>';}).join('')+'</div></div>';
+cN.slice(0,6).forEach(function(c,i){ch('dr-'+i,[{type:'histogram',x:sp(gn(S.train,c),2000),nbinsx:30,opacity:.6,marker:{color:'#2563eb'},name:'Train'},{type:'histogram',x:sp(gn(S.test,c),2000),nbinsx:30,opacity:.6,marker:{color:'#dc2626'},name:'Test'}],DL({barmode:'overlay',margin:{t:30,b:30,l:40,r:10},showlegend:true,legend:{font:{size:11},x:.65,y:.95}}));});}
+
+/* ================================================================
+   NEW: MEMORY OPTIMIZATION
+================================================================ */
+function rMem(){
+  if(!S.train)return;
+  var df=S.train,flds=Object.keys(df[0]||{});
+  var suggestions=flds.map(function(c){
+    var vals=df.slice(0,1000).map(function(r){return r[c];}).filter(function(v){return v!=null&&v!=='';});
+    var numV=vals.filter(function(v){return typeof v==='number'&&!isNaN(v);});
+    var isNum=numV.length/vals.length>.7;
+    var currentType=isNum?'float64':'object';
+    var suggestion='',savings='';
+
+    if(isNum){
+      var mn=Math.min.apply(null,numV),mx=Math.max.apply(null,numV);
+      var isInt=numV.every(function(v){return v===Math.floor(v);});
+      if(isInt){
+        if(mn>=0&&mx<=255){suggestion='uint8';savings='87.5%';}
+        else if(mn>=-128&&mx<=127){suggestion='int8';savings='87.5%';}
+        else if(mn>=0&&mx<=65535){suggestion='uint16';savings='75%';}
+        else if(mn>=-32768&&mx<=32767){suggestion='int16';savings='75%';}
+        else if(mn>=-2147483648&&mx<=2147483647){suggestion='int32';savings='50%';}
+        else{suggestion='int64';savings='0%';}
+      }else{
+        if(mn>-3.4e38&&mx<3.4e38){suggestion='float32';savings='50%';}
+        else{suggestion='float64';savings='0%';}
+      }
+    }else{
+      var u=new Set(vals).size;
+      if(u/vals.length<.5){suggestion='category';savings='~60-90%';}
+      else{suggestion='object';savings='0%';}
+    }
+    return{c:c,current:currentType,suggest:suggestion,savings:savings,hasGain:savings!=='0%'};
+  });
+
+  var gainCols=suggestions.filter(function(s){return s.hasGain;});
+
+  document.getElementById('memc').innerHTML=
+    '<div class="cd">Pandas\'ta dtype downcasting ile bellek kullanımını %50-90 azaltabilirsiniz. Büyük datasetlerde bu fark kritiktir.</div>'+
+    '<div class="g4" style="margin:18px 0">'+B('Toplam Sütun',flds.length,'')+B('Optimize Edilebilir',gainCols.length,'')+B('Tahmini Tasarruf','~50-70%','dtype downcasting ile')+B('Tip',S.num.length+'n / '+S.cat.length+'c','')+'</div>'+
+    '<div class="card"><div class="ct">Sütun Bazlı Öneriler</div><div class="tw"><table><thead><tr><th>Sütun</th><th>Mevcut</th><th>Önerilen</th><th>Tasarruf</th></tr></thead><tbody>'+
+    suggestions.map(function(s){return'<tr style="'+(s.hasGain?'background:rgba(5,150,105,.04)':'')+'"><td>'+s.c+'</td><td><span class="tag t-id">'+s.current+'</span></td><td><span class="tag '+(s.hasGain?'t-ok':'t-id')+'">'+s.suggest+'</span></td><td style="font-weight:'+(s.hasGain?'700':'400')+';color:'+(s.hasGain?'var(--accent3)':'var(--muted)')+'">'+s.savings+'</td></tr>';}).join('')+
+    '</tbody></table></div></div>'+
+    '<div class="card"><div class="ct">Optimizasyon Kodu</div><div class="cbl">import numpy as np\n\ndef reduce_mem(df):\n    for col in df.columns:\n        ctype = df[col].dtype\n        if ctype == \'float64\':\n            df[col] = df[col].astype(\'float32\')\n        elif ctype == \'int64\':\n            mn, mx = df[col].min(), df[col].max()\n            if mn >= 0 and mx <= 255:\n                df[col] = df[col].astype(\'uint8\')\n            elif mn >= -128 and mx <= 127:\n                df[col] = df[col].astype(\'int8\')\n            elif mn >= -32768 and mx <= 32767:\n                df[col] = df[col].astype(\'int16\')\n            elif mn >= -2147483648 and mx <= 2147483647:\n                df[col] = df[col].astype(\'int32\')\n        elif ctype == \'object\':\n            if df[col].nunique() / len(df) < 0.5:\n                df[col] = df[col].astype(\'category\')\n    return df\n\ntrain = reduce_mem(train)\ntest = reduce_mem(test)\nprint(f"Memory: {train.memory_usage(deep=True).sum()/1e6:.1f} MB")</div></div>';
+}
+
+/* FE */
+function rFE(){if(!S.train)return;var sug=[];if(S.num.length>1)sug.push({c:'🔢 Sayısal',cls:'t-n',items:["df['"+S.num[0]+"_x_"+S.num[1]+"'] = df['"+S.num[0]+"'] * df['"+S.num[1]+"']","df['"+S.num[0]+"_ratio'] = df['"+S.num[0]+"'] / (df['"+S.num[1]+"'] + 1e-8)"]});var skewed=skCols(S.train);if(skewed.length)sug.push({c:'📐 Dönüşüm ('+skewed.length+')',cls:'t-w',items:["for col in "+JSON.stringify(skewed)+":\n    df[col+'_log'] = np.log1p(df[col].clip(0))"]});else sug.push({c:'📐 Dönüşüm',cls:'t-ok',items:["# Çarpık sütun yok"]});if(S.cat.length)sug.push({c:'📝 Kategorik',cls:'t-c',items:["import category_encoders as ce\nte = ce.TargetEncoder(cols="+JSON.stringify(S.cat.slice(0,5))+")\ndf_enc = te.fit_transform(df, df['"+S.target+"'])"]});if(S.dt.length)sug.push({c:'📅 Tarih',cls:'t-d',items:S.dt.map(function(c){return"df['"+c+"'] = pd.to_datetime(df['"+c+"'])\ndf['"+c+"_year'] = df['"+c+"'].dt.year\ndf['"+c+"_month'] = df['"+c+"'].dt.month";})});sug.push({c:'🛠️ Genel',cls:'t-ok',items:["from sklearn.preprocessing import RobustScaler\nscaler = RobustScaler()\nX_scaled = scaler.fit_transform(X[num_cols])"]});document.getElementById('fec').innerHTML=sug.map(function(s){return'<div class="card"><div class="ct"><span class="tag '+s.cls+'" style="margin-right:8px">'+s.c.slice(0,2)+'</span>'+s.c.slice(2)+'</div>'+s.items.map(function(code){return'<div class="cbl" style="margin-bottom:8px">'+code+'</div>';}).join('')+'</div>';}).join('');}
+
+/* REPORT */
+function rReport(){if(!S.train)return;var df=S.train,n=df.length,nc=Object.keys(df[0]||{}).length,miss=cM(),dups=cD(),now=new Date().toLocaleString('tr-TR');var oc=outCols(df),skc=skCols(df),hcc=hcCols(df);var score=Math.max(0,100-(miss.total>0?15:0)-(dups>0?10:0)-Math.min(oc.length*5,20)-Math.min(skc.length*3,15)-Math.min(hcc.length*3,15));var sc=score>70?'var(--accent3)':score>50?'var(--warn)':'var(--danger)';
+var tI='';if(S.target){var tv=df.map(function(r){return r[S.target];}).filter(function(v){return v!=null;});if(tv.length&&S.ptype==='classification'){var tvc=vc2(tv);tI='<h3>Target: '+S.target+' (Sınıflandırma · '+tvc.length+' sınıf)</h3><div class="rkpi">'+tvc.slice(0,6).map(function(d){return'<div class="rki"><div class="kl">'+d.k+'</div><div class="kv">'+d.v.toLocaleString()+'</div><div class="kl">'+((d.v/tv.length)*100).toFixed(1)+'%</div></div>';}).join('')+'</div>';}else if(tv.length){var nv=tv.filter(function(x){return typeof x==='number';}),m=av(nv),s=sd(nv,m);tI='<h3>Target: '+S.target+' (Regresyon)</h3><div class="rkpi"><div class="rki"><div class="kl">Mean</div><div class="kv" style="font-size:20px">'+m.toFixed(2)+'</div></div><div class="rki"><div class="kl">Std</div><div class="kv" style="font-size:20px">'+s.toFixed(2)+'</div></div><div class="rki"><div class="kl">N</div><div class="kv" style="font-size:20px">'+nv.length.toLocaleString()+'</div></div></div>';}}
+var issues=[];if(miss.total>0)issues.push('<tr><td><span class="tag t-e">Yüksek</span></td><td>Eksik ('+miss.cols+' col, '+miss.total.toLocaleString()+')</td><td>Bias</td><td>KNN imputation</td></tr>');if(dups>0)issues.push('<tr><td><span class="tag t-e">Yüksek</span></td><td>Duplike ('+dups+')</td><td>Overfit</td><td>drop_duplicates()</td></tr>');if(oc.length)issues.push('<tr><td><span class="tag t-w">Orta</span></td><td>Outlier ('+oc.length+' col)</td><td>Instabilite</td><td>IQR clipping</td></tr>');if(skc.length)issues.push('<tr><td><span class="tag t-w">Orta</span></td><td>Çarpık ('+skc.length+' col)</td><td>Linear perf</td><td>Log transform</td></tr>');if(hcc.length)issues.push('<tr><td><span class="tag t-t">Düşük</span></td><td>Yüksek kardinalite ('+hcc.length+')</td><td>Overfit</td><td>Target enc</td></tr>');if(!issues.length)issues.push('<tr><td colspan="4" style="text-align:center;color:var(--accent3)">✅ Sorun yok</td></tr>');
+var flds=Object.keys(df[0]||{});var app=flds.map(function(c){var mn=0;for(var i=0;i<Math.min(df.length,2000);i++){if(df[i][c]==null||df[i][c]==='')mn++;}var tot=Math.min(df.length,2000);var role=c===S.target?'Target':c===S.idCol?'ID':S.num.indexOf(c)!==-1?'Num':S.cat.indexOf(c)!==-1?'Cat':'?';return'<tr><td>'+c+'</td><td>'+role+'</td><td>'+mn+'</td><td>'+((mn/tot)*100).toFixed(1)+'%</td><td>'+new Set(df.slice(0,2000).map(function(r){return r[c];}).filter(function(v){return v!=null;})).size+'</td></tr>';}).join('');
+document.getElementById('rpc').innerHTML='<div class="rprt" id="rpt"><div class="rh"><h1>📊 VERİ ANALİZ RAPORU</h1><div class="report-sub">EDA · Kaggle Pro</div><div style="font-size:12px;color:var(--muted);margin-top:8px">'+now+'</div></div><div class="rs"><h2>1. Özet</h2><div class="rt"><strong>'+n.toLocaleString()+'</strong> satır, <strong>'+nc+'</strong> sütun. Target: "'+S.target+'" ('+S.ptype+'). Skor: <strong>'+score+'/100</strong>.</div></div><div class="rs"><h2>2. Profil</h2><div class="rkpi"><div class="rki"><div class="kl">Satır</div><div class="kv">'+n.toLocaleString()+'</div></div><div class="rki"><div class="kl">Sütun</div><div class="kv">'+nc+'</div></div><div class="rki"><div class="kl">Eksik</div><div class="kv" style="color:'+(miss.total>0?'var(--warn)':'var(--accent3)')+'">'+miss.total.toLocaleString()+'</div></div><div class="rki"><div class="kl">Duplike</div><div class="kv">'+dups+'</div></div></div></div><div class="rs"><h2>3. Kalite</h2><div style="text-align:center;margin:24px 0"><div style="font-family:var(--display);font-size:72px;font-weight:800;color:'+sc+'">'+score+'</div><div style="font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;font-weight:600">KALİTE SKORU</div></div></div><div class="rs"><h2>4. Target</h2>'+tI+'</div><div class="rs"><h2>5. Sorunlar</h2><table class="rtbl"><thead><tr><th>Öncelik</th><th>Sorun</th><th>Etki</th><th>Çözüm</th></tr></thead><tbody>'+issues.join('')+'</tbody></table></div><div class="rs"><h2>6. Adımlar</h2><div class="rt" style="line-height:2.4"><div>1. Eksik değer imputation</div><div>2. Leakage kontrolü 🚨</div><div>3. Duplike kaldırma</div><div>4. Outlier clipping</div><div>5. Memory optimization 💾</div><div>6. Feature engineering</div><div>7. Feature importance ranking 🏆</div><div>8. Baseline (LightGBM, 5-Fold CV)</div><div>9. Optuna tuning</div><div>10. Ensemble + SHAP</div></div></div><div class="rs"><h2>7. Sütunlar</h2><div style="overflow-x:auto"><table class="rtbl"><thead><tr><th>Sütun</th><th>Rol</th><th>Eksik</th><th>%</th><th>Unique</th></tr></thead><tbody>'+app+'</tbody></table></div></div><div style="text-align:center;padding-top:24px;border-top:2px solid var(--border);font-size:11px;color:var(--muted)">GİZLİ · EDA v12 · '+now+'</div></div>';}
+function dlReport(){var el=document.getElementById('rpt');if(!el)return;var css='body{font-family:Inter,Arial;background:#fff;color:#1a1a1a;padding:40px;max-width:1000px;margin:0 auto;line-height:1.7}h1{font-size:30px;color:#2563eb;text-align:center;border-bottom:3px solid #2563eb;padding-bottom:18px}h2{font-size:18px;color:#2563eb;margin-top:30px;border-bottom:1px solid #e5e5e0;padding-bottom:8px}table{width:100%;border-collapse:collapse;margin:14px 0;font-size:12px}th{background:#f1f5f9;padding:10px 14px;border:1px solid #ddd;font-weight:700}td{padding:10px 14px;border:1px solid #ddd}.rkpi{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:14px 0}.rki{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:18px;text-align:center}.kv{font-size:26px;font-weight:700;margin:5px 0}.kl{font-size:11px;color:#666;text-transform:uppercase;font-weight:600}.rt{font-size:13px;color:#4b5563;line-height:1.9}.tag{display:inline-block;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;border:1px solid #ddd}';var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>EDA Report</title><style>'+css+'</style></head><body>'+el.innerHTML+'</body></html>';var blob=new Blob([html],{type:'text/html'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='EDA_Report_'+new Date().toISOString().slice(0,10)+'.html';a.click();}
+console.log('v12 Kaggle Pro OK');
+</script>
+</body>
+</html>
