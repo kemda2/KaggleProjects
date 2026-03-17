@@ -31,6 +31,7 @@ import matplotlib.pyplot as plt
 
 from scipy import stats
 from scipy.stats import chi2_contingency, ks_2samp
+from typing import List, Set
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import (roc_auc_score, brier_score_loss,
                               precision_recall_curve, confusion_matrix,
@@ -174,6 +175,17 @@ def cramers_v_score(x, y_arr):
     return v, float(p)
 
 
+def _lock_spw(params: dict) -> dict:
+    """
+    [P2] scale_pos_weight kilitli ise parametreleri EDA değerleriyle günceller.
+    Optuna / Bridge objective / best_params güncellemelerinde tek yerden çağrılır.
+    """
+    if CFG.get("_spw_locked"):
+        params["is_unbalance"]     = False
+        params["scale_pos_weight"] = CFG["base_lgbm_params"]["scale_pos_weight"]
+    return params
+
+
 def auto_detect_id(df):
     for c in df.columns:
         if c.lower() in ("id", "customerid", "customer_id"):
@@ -196,8 +208,11 @@ _OFE_FOLD_CACHE: dict = {}   # key = fold_hash, value = list of OFE features
 
 
 def _fold_hash(tr_idx: np.ndarray) -> int:
-    """Fold'u temsil eden deterministik hash (ilk+son+toplam)."""
-    return hash((int(tr_idx[0]), int(tr_idx[-1]), int(tr_idx.sum())))
+    """
+    [P2] tobytes() ile tam içerik hash — (first, last, sum) üçlüsünden
+    farklı fold'ların aynı hash'i üretme riski ortadan kalkar.
+    """
+    return hash(tr_idx.tobytes())
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -510,10 +525,8 @@ def objective(trial):
         "min_split_gain":    trial.suggest_float("min_split_gain", 0.0, 1.0),
         "bagging_freq":      trial.suggest_int("bagging_freq", 1, 7),
     }
-    # [R-P3-B] Kilitli scale_pos_weight Optuna tarafından değiştirilmiyor
-    if CFG.get("_spw_locked"):
-        p["is_unbalance"]     = False
-        p["scale_pos_weight"] = CFG["base_lgbm_params"]["scale_pos_weight"]
+    # [R-P3-B] / [P2] Kilitli scale_pos_weight _lock_spw ile korunuyor
+    p = _lock_spw(p)
     return lgb_cv_safe(p, train, y, test, te_candidate_cols,
                        n_splits=CFG["optuna_cv_splits"], seed=CFG["seed"])
 
@@ -529,10 +542,7 @@ if CFG["optuna_enabled"]:
     study.optimize(objective, n_trials=CFG["optuna_n_trials"],
                    timeout=CFG["optuna_timeout"], show_progress_bar=True)
     log(f"Optuna bitti — en iyi AUC: {study.best_value:.5f}", "OK")
-    best_params = {**CFG["base_lgbm_params"], **study.best_params}
-    if CFG.get("_spw_locked"):
-        best_params["is_unbalance"]     = False
-        best_params["scale_pos_weight"] = CFG["base_lgbm_params"]["scale_pos_weight"]
+    best_params = _lock_spw({**CFG["base_lgbm_params"], **study.best_params})
 
     if CFG["plot_figures"]:
         try:
@@ -618,10 +628,8 @@ if CFG.get("bridge_enabled", True) and CFG["openfe_enabled"] and HAS_OFE:
                 min(150, int(bp.get("min_child_samples", 50) * 2.0)),
             ),
         }
-        # [R-P3-B] Kilitli scale_pos_weight korunur
-        if CFG.get("_spw_locked"):
-            p["is_unbalance"]     = False
-            p["scale_pos_weight"] = CFG["base_lgbm_params"]["scale_pos_weight"]
+        # [P2] _lock_spw ile scale_pos_weight koruması
+        p = _lock_spw(p)
         # Aynı feature uzayında AUC → adil karşılaştırma
         return _bridge_cv_auc(p, n_splits=3)
 
@@ -645,10 +653,7 @@ if CFG.get("bridge_enabled", True) and CFG["openfe_enabled"] and HAS_OFE:
 
     if delta > 0.0005:  # 0.05 AUC puan eşiği — gürültüden anlamlı fark
         best_params.update(bridge_study.best_params)
-        # scale_pos_weight kilidinı koru
-        if CFG.get("_spw_locked"):
-            best_params["is_unbalance"]     = False
-            best_params["scale_pos_weight"] = CFG["base_lgbm_params"]["scale_pos_weight"]
+        best_params = _lock_spw(best_params)  # [P2] kilidi koru
         log(f"Bridge params güncellendi → {bridge_study.best_params}", "OK")
         log(f"Parametre uyumsuzluğu düzeltildi (+{delta:.5f} AUC aynı uzayda)", "OK")
     else:
@@ -669,26 +674,31 @@ N_SPLITS = CFG["final_cv_splits"]
 all_oof  = np.zeros((N_SEEDS, len(train)))
 all_test = np.zeros((N_SEEDS, len(test)))
 feat_imp_list   = []
-all_fold_features: list[set] = []   # [R-P1-B] her fold'un feature seti
+all_fold_features: List[Set[str]] = []   # [R-P1-B] [P3] Python 3.8 uyumlu tip hint
 
-# [R-P1-C] OpenFE fold cache seed döngüsünden önce doldurulur
+# [P0] FOLD SPLIT YAPISI SABİT (random_state=CFG["seed"]) — tüm seed'lerde aynı.
+# LGB model randomness'ı sadece LightGBM random_state'ten gelir.
+# Böylece cache warm-up fold'ları = Final CV fold'ları → her zaman cache HIT.
+FOLD_SKF = StratifiedKFold(N_SPLITS, shuffle=True, random_state=CFG["seed"])
+FOLD_SPLITS = list(FOLD_SKF.split(train, y))   # önceden hesapla, tekrar kullan
+
+# [R-P1-C] OpenFE fold cache: sabit fold split'ler → 5 fit, seed'ler paylaşır
 if CFG["openfe_enabled"] and HAS_OFE and CFG.get("openfe_in_cv", True):
-    log("OpenFE fold cache ön-doldurma (5 fold × 1 kez = 5 fit)...")
+    log(f"OpenFE fold cache ön-doldurma ({N_SPLITS} fold × 1 kez = {N_SPLITS} fit)...")
     _OFE_FOLD_CACHE.clear()
-    _warmup_skf = StratifiedKFold(N_SPLITS, shuffle=True, random_state=CFG["seed"])
-    for _fold, (_tr, _va) in enumerate(_warmup_skf.split(train, y), 1):
+    for _fold, (_tr, _va) in enumerate(FOLD_SPLITS, 1):
         log(f"  Cache warm-up fold {_fold}/{N_SPLITS} ...")
         build_fold(train, y, test, _tr, _va, te_candidate_cols, CFG)
-    log(f"Cache hazır: {len(_OFE_FOLD_CACHE)} fold", "OK")
+    log(f"Cache hazır: {len(_OFE_FOLD_CACHE)} fold (tüm seed'ler bu fold'ları paylaşır)", "OK")
 
 for si in range(N_SEEDS):
     seed = CFG["seed"] + si * 1000
-    p    = {**best_params, "random_state": seed}
-    skf  = StratifiedKFold(N_SPLITS, shuffle=True, random_state=seed)
+    p    = _lock_spw({**best_params, "random_state": seed})
     oof_s = np.zeros(len(train)); test_s = np.zeros(len(test))
     fold_scores = []
 
-    for fold, (tr_idx, va_idx) in enumerate(skf.split(train, y), 1):
+    # [P0] FOLD_SPLITS sabit → her seed için aynı fold yapısı → cache HIT garantili
+    for fold, (tr_idx, va_idx) in enumerate(FOLD_SPLITS, 1):
         Xtr, Xval, Xtest_f = build_fold(
             train, y, test, tr_idx, va_idx, te_candidate_cols, CFG
         )
@@ -763,11 +773,7 @@ log("Threshold optimizasyonu (cost-based)", "STEP")
 
 FN_COST = CFG["fn_cost"]; FP_COST = CFG["fp_cost"]
 thrs    = np.linspace(0.01, 0.99, 400)
-costs   = [
-    ((oof_final >= t).astype(int) == 0).sum() * 0   # dummy init
-    for t in thrs
-]
-costs = []
+costs   = []
 for t in thrs:
     pred = (oof_final >= t).astype(int)
     costs.append(
@@ -831,6 +837,10 @@ log(f"Top desil lift: {top_lift:.2f}x", "OK" if top_lift >= 2 else "WARN")
 shap_top5 = []
 if HAS_SHAP and STABLE_FEATURES:
     log("SHAP analizi (bias-free stabilite)", "STEP")
+    # [P2] NOT: SHAP ve Permutation OpenFE olmadan çalışır (hız kararı).
+    # Gösterilen feature önem sıralaması Final CV'nin OpenFE'li feature setinden
+    # farklı olabilir. OpenFE feature'larının SHAP değerleri bu analizde yer almaz.
+    # Bu bilinçli bir tradeoff — OpenFE'li SHAP 3 fold × build_fold gerektirir.
     try:
         shap_folds_data = []   # her fold: (mean_abs_shap, feature_names)
 
@@ -896,6 +906,8 @@ log("Permutation Importance (LightGBM)", "STEP")
 
 perm_df = pd.DataFrame()
 try:
+    # [P2] NOT: Permutation SHAP gibi OpenFE'siz çalışır — hız tradeoff'u.
+    # Final CV'deki OpenFE feature'ları bu analizde görünmez.
     cfg_no_ofe_p = {**CFG, "openfe_enabled": False}
     tr_i_, va_i_ = list(
         StratifiedKFold(3, shuffle=True, random_state=CFG["seed"]).split(train, y)
@@ -968,29 +980,53 @@ if CFG["plot_figures"]:
         fi_mean_stable   = fi_mean[fi_mean.index.isin(STABLE_FEATURES)].sort_values(ascending=True)
         fi_mean_unstable = fi_mean[~fi_mean.index.isin(STABLE_FEATURES)].sort_values(ascending=True)
 
+        # [P1] Unstable feature'ları logla — fold'ların bir kısmında yok, güvenilirliği düşük
+        if not fi_mean_unstable.empty:
+            log(f"⚠️  Unstable feature'lar ({len(fi_mean_unstable)} adet — bazı fold'larda yok):", "WARN")
+            for feat, val in fi_mean_unstable.sort_values(ascending=False).head(10).items():
+                log(f"    {feat:40s} gain={val:.1f}", "WARN")
+
         TE_SET = {f"{c}_te" for c in te_candidate_cols}
         def get_color(feat):
             if feat in TE_SET: return "#7F77DD"
             return "#1D9E75" if feat not in FEATURES_BASE else "#888780"
 
-        fig, axes = plt.subplots(1, 2, figsize=(22, max(8, len(fi_mean_stable) * 0.35)))
+        # Subplot sayısını unstable feature'a göre ayarla
+        n_plots = 2 if fi_mean_unstable.empty else 3
+        fig, axes = plt.subplots(1, n_plots,
+                                 figsize=(11 * n_plots, max(8, len(fi_mean_stable) * 0.35)))
+        if n_plots == 2:
+            ax_all, ax_top = axes
+        else:
+            ax_all, ax_top, ax_unstable = axes
+
         if not fi_mean_stable.empty:
-            axes[0].barh(fi_mean_stable.index, fi_mean_stable.values,
-                         color=[get_color(f) for f in fi_mean_stable.index])
-            axes[0].set_title(f"Feature Importance — Gain (stabil, n={len(fi_mean_stable)})", fontsize=11)
-            axes[0].tick_params(labelsize=7)
+            ax_all.barh(fi_mean_stable.index, fi_mean_stable.values,
+                        color=[get_color(f) for f in fi_mean_stable.index])
+            ax_all.set_title(f"Feature Importance — Gain (stabil, n={len(fi_mean_stable)})", fontsize=11)
+            ax_all.tick_params(labelsize=7)
 
         top25s = fi_mean_stable.tail(25)
         if not top25s.empty:
-            axes[1].barh(top25s.index, top25s.values,
-                         color=[get_color(f) for f in top25s.index])
-            axes[1].set_title("Top 25 (stabil feature)", fontsize=11)
+            ax_top.barh(top25s.index, top25s.values,
+                        color=[get_color(f) for f in top25s.index])
+            ax_top.set_title("Top 25 (stabil feature)", fontsize=11)
         from matplotlib.patches import Patch
-        axes[1].legend(handles=[
+        ax_top.legend(handles=[
             Patch(color="#1D9E75", label="OpenFE"),
             Patch(color="#7F77DD", label="Target Encoding"),
             Patch(color="#888780", label="Ham / LE"),
         ], loc="lower right", fontsize=9)
+
+        # [P1] Unstable feature'ları ayrı subplot'ta göster
+        if n_plots == 3 and not fi_mean_unstable.empty:
+            top_unstable = fi_mean_unstable.tail(min(20, len(fi_mean_unstable)))
+            ax_unstable.barh(top_unstable.index, top_unstable.values,
+                             color=[get_color(f) for f in top_unstable.index],
+                             alpha=0.5)
+            ax_unstable.set_title(f"Unstable Feature'lar (n={len(fi_mean_unstable)}) — fold'lara göre değişken",
+                                  fontsize=11)
+            ax_unstable.tick_params(labelsize=7)
         plt.tight_layout()
         plt.savefig(os.path.join(CFG["output_dir"], "feature_importance.png"),
                     dpi=120, bbox_inches="tight")
