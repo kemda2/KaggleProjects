@@ -134,6 +134,14 @@ CFG = {
 
     "output_dir":   "/kaggle/working",
     "plot_figures": True,
+
+    # ── Bridge Validation ─────────────────────────────────────────────────────
+    # Optuna (OpenFE'siz) → Bridge (OpenFE'li, dar aralık) → Final CV
+    # bridge_n_trials: 15 trial × 3 fold = 45 OpenFE fit (cache ile ~15 fit)
+    # bridge_timeout:  saniye cinsinden; None = süresiz
+    "bridge_enabled":   True,
+    "bridge_n_trials":  15,
+    "bridge_timeout":   1800,   # 30 dakika
 }
 
 TARGET = CFG["target"]
@@ -536,6 +544,118 @@ if CFG["optuna_enabled"]:
             log(f"Optuna görsel: {e}", "WARN")
 else:
     log("Optuna devre dışı.", "WARN")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 7b.  BRIDGE VALIDATION — Optuna (OpenFE'siz) → Bridge (OpenFE'li)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+#  Neden gerekli?
+#  Optuna ~20 feature ile çalışır; Final CV ~50 feature'la çalışır.
+#  Feature sayısına duyarlı 3 parametre (num_leaves, colsample_bytree,
+#  min_child_samples) suboptimal kalabilir.
+#
+#  Düzeltilen reviewer sorunu:
+#  Orijinal öneri bridge_study.best_value > study.best_value karşılaştırması
+#  yapıyordu — farklı feature uzaylarında üretilen AUC'ler karşılaştırılamaz.
+#  Doğru yaklaşım: aynı OpenFE'li feature uzayında best_params vs bridge_params
+#  head-to-head karşılaştırması.
+#
+#  Maliyet: 15 trial × 3 fold = 45 OpenFE fold; cache sayesinde gerçek fit = 15.
+# ═══════════════════════════════════════════════════════════════════════════════
+log("Bridge Validation (Optuna→OpenFE parametre geçişi)", "STEP")
+
+
+def _bridge_cv_auc(params: dict, n_splits: int = 3, seed: int = CFG["seed"]) -> float:
+    """
+    OpenFE'li fold fabrikası üzerinden AUC hesaplar.
+    Her iki parametre setini (best_params ve bridge_params) karşılaştırmak için
+    AYNI çağrı kullanılır → feature uzayı eşit → adil karşılaştırma.
+    """
+    skf    = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    scores = []
+    for tr_i, va_i in skf.split(train, y):
+        Xtr_b, Xval_b, _ = build_fold(
+            train, y, test, tr_i, va_i, te_candidate_cols, {**CFG}
+        )
+        cols_b = [c for c in Xtr_b.columns if c in Xval_b.columns]
+        d_tr = lgb.Dataset(Xtr_b[cols_b], label=y.iloc[tr_i].values)
+        d_va = lgb.Dataset(Xval_b[cols_b], label=y.iloc[va_i].values,
+                           reference=d_tr)
+        m = lgb.train(
+            params, d_tr, num_boost_round=800,
+            valid_sets=[d_va],
+            callbacks=[lgb.early_stopping(50, verbose=False),
+                       lgb.log_evaluation(-1)]
+        )
+        scores.append(roc_auc_score(y.iloc[va_i].values, m.predict(Xval_b[cols_b])))
+    return float(np.mean(scores)) if scores else 0.5
+
+
+if CFG.get("bridge_enabled", True) and CFG["openfe_enabled"] and HAS_OFE:
+    # ── Baseline: mevcut best_params'ı OpenFE'li uzayda ölç ──────────────────
+    log("Bridge baseline (best_params, OpenFE'li uzayda) ölçülüyor...")
+    bridge_baseline_auc = _bridge_cv_auc(best_params, n_splits=3)
+    log(f"Bridge baseline AUC: {bridge_baseline_auc:.5f}", "OK")
+
+    # ── Bridge Optuna: sadece feature-sensitive 3 parametre, dar aralık ──────
+    def bridge_objective(trial):
+        bp = best_params  # Optuna'nın bulduğu değerler baz alınır
+        p  = {
+            **bp,
+            # Dar aralık: Optuna değerinin ±%40 çevresi
+            "num_leaves": trial.suggest_int(
+                "num_leaves",
+                max(20,  int(bp.get("num_leaves", 63) * 0.6)),
+                min(255, int(bp.get("num_leaves", 63) * 1.6)),
+            ),
+            "colsample_bytree": trial.suggest_float(
+                "colsample_bytree", 0.3, 1.0
+            ),
+            "min_child_samples": trial.suggest_int(
+                "min_child_samples",
+                max(5,   int(bp.get("min_child_samples", 50) * 0.4)),
+                min(150, int(bp.get("min_child_samples", 50) * 2.0)),
+            ),
+        }
+        # [R-P3-B] Kilitli scale_pos_weight korunur
+        if CFG.get("_spw_locked"):
+            p["is_unbalance"]     = False
+            p["scale_pos_weight"] = CFG["base_lgbm_params"]["scale_pos_weight"]
+        # Aynı feature uzayında AUC → adil karşılaştırma
+        return _bridge_cv_auc(p, n_splits=3)
+
+    bridge_study = optuna.create_study(
+        direction="maximize",
+        sampler=optuna.samplers.TPESampler(seed=CFG["seed"])
+    )
+    bridge_study.optimize(
+        bridge_objective,
+        n_trials=CFG["bridge_n_trials"],
+        timeout=CFG["bridge_timeout"],
+        show_progress_bar=True,
+    )
+    bridge_best_auc = bridge_study.best_value
+
+    # ── Adil karşılaştırma: aynı feature uzayı ───────────────────────────────
+    delta = bridge_best_auc - bridge_baseline_auc
+    log(f"Bridge baseline AUC  : {bridge_baseline_auc:.5f}")
+    log(f"Bridge best AUC      : {bridge_best_auc:.5f}")
+    log(f"Delta (aynı uzayda)  : {delta:+.5f}")
+
+    if delta > 0.0005:  # 0.05 AUC puan eşiği — gürültüden anlamlı fark
+        best_params.update(bridge_study.best_params)
+        # scale_pos_weight kilidinı koru
+        if CFG.get("_spw_locked"):
+            best_params["is_unbalance"]     = False
+            best_params["scale_pos_weight"] = CFG["base_lgbm_params"]["scale_pos_weight"]
+        log(f"Bridge params güncellendi → {bridge_study.best_params}", "OK")
+        log(f"Parametre uyumsuzluğu düzeltildi (+{delta:.5f} AUC aynı uzayda)", "OK")
+    else:
+        log(f"Optuna params OpenFE uzayında da yeterli — bridge güncelleme yok "
+            f"(delta={delta:+.5f} < 0.0005)", "OK")
+else:
+    log("Bridge validation atlandı (devre dışı veya OpenFE yok).", "WARN")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
