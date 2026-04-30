@@ -94,6 +94,7 @@ memory usage: 96.1+ MB
 
 **F-statistic:** 158.30 | **p-value:** 0.0000
 
+![](./im/001.png)
 ---
 
 ## Soil_Moisture
@@ -106,6 +107,7 @@ memory usage: 96.1+ MB
 
 **F-statistic:** 82555.92 | **p-value:** 0.0000
 
+![](./im/002.png)
 ---
 
 ## Organic_Carbon
@@ -117,7 +119,7 @@ memory usage: 96.1+ MB
 | 2               | 21009.0  | 0.92 | 0.37 | 0.3 | 0.33 | 0.37 | 0.41 | 0.48 | 0.58 | 0.71 | 0.91 | 1.19 | 1.25 | 1.37 | 1.44 | 1.52 | 1.58 | 1.6 |
 
 **F-statistic:** 16.17 | **p-value:** 0.0000
-
+![](./im/003.png)
 ---
 
 ## Electrical_Conductivity
@@ -129,7 +131,7 @@ memory usage: 96.1+ MB
 | 2               | 21009.0  | 1.69 | 0.89 | 0.1 | 0.24 | 0.39 | 0.52 | 0.69 | 0.95 | 1.17 | 1.65 | 2.21 | 2.37 | 2.76 | 2.99 | 3.23 | 3.45 | 3.5 |
 
 **F-statistic:** 146.96 | **p-value:** 0.0000
-
+![](./im/004.png)
 ---
 
 ## Temperature_C
