@@ -182,6 +182,7 @@ memory usage: 96.1+ MB
 
 **F-statistic:** 8.74 | **p-value:** 0.0002
 
+![](./im/008.png)
 ---
 
 ## Wind_Speed_kmh
@@ -193,7 +194,7 @@ memory usage: 96.1+ MB
 | 2               | 21009.0  | 14.64 | 4.12 | 0.5 | 1.59 | 5.78 | 10.40 | 11.09 | 12.12 | 13.30 | 15.01 | 17.46 | 18.02 | 19.09 | 19.45 | 19.67 | 19.91 | 20.0 |
 
 **F-statistic:** 22514.09 | **p-value:** 0.0000
-
+![](./im/009.png)
 ---
 
 ## Field_Area_hectare
@@ -206,6 +207,7 @@ memory usage: 96.1+ MB
 
 **F-statistic:** 130.16 | **p-value:** 0.0000
 
+![](./im/010.png)
 ---
 
 ## Previous_Irrigation_mm
