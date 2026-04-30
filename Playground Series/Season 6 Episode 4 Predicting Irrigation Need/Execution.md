@@ -220,6 +220,9 @@ memory usage: 96.1+ MB
 
 **F-statistic:** 137.64 | **p-value:** 0.0000
 
+![](./im/011.png)
+
+![](./im/012.png)
 ---
 
 # CATEGORICAL FEATURES
