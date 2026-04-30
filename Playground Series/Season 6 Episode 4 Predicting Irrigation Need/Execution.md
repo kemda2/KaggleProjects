@@ -960,4 +960,310 @@ Selected threshold: **0.475**
 
 Feature engineering is not working. On the contrary, it is causing overfitting.
 
-#
+# Three Model Combining
+
+```python
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import FunctionTransformer
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.metrics import (balanced_accuracy_score, classification_report,
+                             recall_score, precision_score, fbeta_score)
+from sklearn.utils.class_weight import compute_class_weight
+from category_encoders import TargetEncoder
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings('ignore')
+
+# =========================
+# 1. VERİ YÜKLE
+# =========================
+train = pd.read_csv("/kaggle/input/competitions/playground-series-s6e4/train.csv")
+test = pd.read_csv("/kaggle/input/competitions/playground-series-s6e4/test.csv")
+
+target = "Irrigation_Need"
+idc = "id"
+
+y = train[target].map({"Low": 0, "Medium": 1, "High": 2})
+X = train.drop([target, idc], axis=1)
+X_test = test.drop([idc], axis=1)
+
+# =========================
+# 2. FEATURE ENGINEERING (İKİ VERSİYON)
+# =========================
+def fe_minimal(df):
+    """Model 1 için sade bir FE – sadece en önemli etkileşimler, ikili flag yok."""
+    df = df.copy()
+    df['Evaporation_Risk'] = df['Temperature_C'] * df['Wind_Speed_kmh'] / (df['Humidity'] + 1)
+    df['Water_Deficit'] = df['Rainfall_mm'] - df['Previous_Irrigation_mm']
+    df['Moisture_Per_Temp'] = df['Soil_Moisture'] / (df['Temperature_C'] + 1)
+    df['Temp_Wind'] = df['Temperature_C'] * df['Wind_Speed_kmh']
+    return df
+
+def fe_none(df):
+    """Model 2 ve 3 için – hiç FE yok."""
+    return df.copy()
+
+# =========================
+# 3. TARGET ENCODER WRAPPER
+# =========================
+class CustomTargetEncoder(BaseEstimator, TransformerMixin):
+    def __init__(self):
+        self.encoder = None
+        self.cat_cols_ = None
+
+    def fit(self, X, y):
+        self.cat_cols_ = X.select_dtypes(include=['object', 'category']).columns.tolist()
+        if self.cat_cols_:
+            self.encoder = TargetEncoder()
+            self.encoder.fit(X[self.cat_cols_], y)
+        return self
+
+    def transform(self, X):
+        X_out = X.copy()
+        if self.cat_cols_:
+            X_out[self.cat_cols_] = self.encoder.transform(X[self.cat_cols_])
+        return X_out
+
+# =========================
+# 4. MODEL SARICILAR (sample_weight için)
+# =========================
+class SampleWeightXGBClassifier(BaseEstimator, TransformerMixin):
+    def __init__(self, **params):
+        self.model = XGBClassifier(**params)
+        self.class_weight_ = None
+
+    def set_class_weight(self, cw):
+        self.class_weight_ = cw
+
+    def fit(self, X, y, sample_weight=None):
+        if sample_weight is None and self.class_weight_ is not None:
+            sample_weight = np.array([self.class_weight_[label] for label in y])
+        self.model.fit(X, y, sample_weight=sample_weight)
+        return self
+
+    def predict(self, X):
+        return self.model.predict(X)
+
+    def predict_proba(self, X):
+        return self.model.predict_proba(X)
+
+class SampleWeightLGBMClassifier(BaseEstimator, TransformerMixin):
+    """LGBM için class_weight parametresini sample_weight'e dönüştüren sarmalayıcı."""
+    def __init__(self, **params):
+        self.model = LGBMClassifier(**params)
+        self.class_weight_ = None
+
+    def set_class_weight(self, cw):
+        self.class_weight_ = cw
+
+    def fit(self, X, y, sample_weight=None):
+        if sample_weight is None and self.class_weight_ is not None:
+            sample_weight = np.array([self.class_weight_[label] for label in y])
+        self.model.fit(X, y, sample_weight=sample_weight)
+        return self
+
+    def predict(self, X):
+        return self.model.predict(X)
+
+    def predict_proba(self, X):
+        return self.model.predict_proba(X)
+
+# =========================
+# 5. PIPELINE KURUCULARI
+# =========================
+def build_xgb_pipeline(fe_func, class_weight_dict=None, **xgb_params):
+    model = SampleWeightXGBClassifier(
+        n_estimators=500,
+        max_depth=5,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        tree_method="hist",
+        eval_metric="mlogloss",
+        random_state=42,
+        **xgb_params
+    )
+    if class_weight_dict is not None:
+        model.set_class_weight(class_weight_dict)
+    return Pipeline([
+        ("fe", FunctionTransformer(fe_func)),
+        ("target_enc", CustomTargetEncoder()),
+        ("model", model)
+    ])
+
+def build_lgbm_pipeline(fe_func, class_weight_dict=None, **lgbm_params):
+    model = SampleWeightLGBMClassifier(
+        n_estimators=700,
+        learning_rate=0.05,
+        max_depth=-1,
+        num_leaves=64,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=42,
+        **lgbm_params
+    )
+    if class_weight_dict is not None:
+        model.set_class_weight(class_weight_dict)
+    return Pipeline([
+        ("fe", FunctionTransformer(fe_func)),
+        ("target_enc", CustomTargetEncoder()),
+        ("model", model)
+    ])
+
+# =========================
+# 6. OOF & TEST TAHMİN FONKSİYONU
+# =========================
+def get_oof_test_preds(pipe, X, y, X_test, n_splits=5, seed=42):
+    """
+    StratifiedKFold ile OOF (out-of-fold) probability'leri ve 
+    test seti için ortalama probability'leri döndürür.
+    """
+    cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    n_classes = y.nunique()
+    oof_preds = np.zeros((len(X), n_classes))
+    test_preds = np.zeros((len(X_test), n_classes))
+
+    for fold, (train_idx, val_idx) in enumerate(cv.split(X, y)):
+        X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
+        y_tr, y_val = y.iloc[train_idx], y.iloc[val_idx]
+
+        pipe_clone = Pipeline(pipe.steps)  # her fold için temiz kopya
+        pipe_clone.fit(X_tr, y_tr)
+
+        oof_preds[val_idx] = pipe_clone.predict_proba(X_val)
+        test_preds += pipe_clone.predict_proba(X_test) / n_splits
+
+        print(f"  Fold {fold+1} tamamlandı.")
+
+    return oof_preds, test_preds
+
+# =========================
+# 7. ÇOK‑SINIFLI EŞİK OPTİMİZASYONU
+# =========================
+def dual_threshold_search(proba, y_true, t2_range=np.arange(0.3, 0.65, 0.025), 
+                         t1_range=np.arange(0.3, 0.75, 0.025), beta=2):
+    """
+    proba: (n_samples, 3) olasılık matrisi
+    y_true: gerçek etiketler
+    t2_range: class 2 için eşik aralığı
+    t1_range: class 1 için eşik aralığı
+    beta: F-beta skorunda recall ağırlığı (2 = F2)
+    """
+    best_f2 = -1
+    best_t2, best_t1 = 0.5, 0.5
+
+    for t2 in t2_range:
+        for t1 in t1_range:
+            preds = np.zeros(len(proba), dtype=int)
+            for i in range(len(proba)):
+                if proba[i, 2] > t2:
+                    preds[i] = 2
+                elif proba[i, 1] > t1:
+                    preds[i] = 1
+                else:
+                    preds[i] = 0
+            f2 = fbeta_score(y_true, preds, average='micro', beta=beta)
+            if f2 > best_f2:
+                best_f2 = f2
+                best_t2, best_t1 = t2, t1
+
+    # En iyi eşiklerle metrikleri yazdır
+    final_preds = np.zeros(len(proba), dtype=int)
+    for i in range(len(proba)):
+        if proba[i, 2] > best_t2:
+            final_preds[i] = 2
+        elif proba[i, 1] > best_t1:
+            final_preds[i] = 1
+        else:
+            final_preds[i] = 0
+
+    print(f"En iyi eşikler: t2={best_t2:.3f}, t1={best_t1:.3f} | F{beta}: {best_f2:.4f}")
+    print("Seçilen eşiklerle metrikler:")
+    print(classification_report(y_true, final_preds, digits=4))
+    return best_t2, best_t1
+
+# =========================
+# 8. ANA ENSEMBLE İŞLEMİ
+# =========================
+# --- Sınıf ağırlıkları (balanced + High sınıfına vurgu) ---
+classes = np.array([0, 1, 2])
+class_weights = compute_class_weight('balanced', classes=classes, y=y)
+class_weight_dict = dict(zip(classes, class_weights))
+class_weight_dict[2] *= 2.0   # High sınıfına daha fazla ağırlık (1.5, 2, 3 denenebilir)
+print("Kullanılan class_weight:", class_weight_dict)
+
+# --- Model havuzu ---
+pipelines = {
+    "XGB_minFE": build_xgb_pipeline(fe_minimal, class_weight_dict),
+    "XGB_raw":   build_xgb_pipeline(fe_none, class_weight_dict),
+    "LGBM_raw":  build_lgbm_pipeline(fe_none, class_weight_dict)
+}
+
+# --- OOF ve test tahminleri ---
+oof_dict = {}
+test_dict = {}
+
+for name, pipe in pipelines.items():
+    print(f"\n{'='*60}\n{name} modeli OOF üretiliyor...")
+    oof, test_pred = get_oof_test_preds(pipe, X, y, X_test, n_splits=5)
+    oof_dict[name] = oof
+    test_dict[name] = test_pred
+
+# --- OOF üzerinde blending ağırlık optimizasyonu (grid search) ---
+from itertools import product
+
+best_f2 = -1
+best_w = None
+
+weights_range = np.linspace(0.1, 0.5, 5)  # her model ağırlığı 0.1 - 0.5 arası
+for w1, w2, w3 in product(weights_range, repeat=3):
+    if abs(w1 + w2 + w3 - 1.0) > 1e-3:
+        continue
+    blended_oof = (w1 * oof_dict["XGB_minFE"] +
+                   w2 * oof_dict["XGB_raw"] +
+                   w3 * oof_dict["LGBM_raw"])
+    # OOF üzerinde F2 hesapla (micro average)
+    preds = np.argmax(blended_oof, axis=1)  # geçici olarak argmax ile değerlendir
+    f2 = fbeta_score(y, preds, average='micro', beta=2)
+    if f2 > best_f2:
+        best_f2 = f2
+        best_w = (w1, w2, w3)
+
+print(f"\nEn iyi blending ağırlıkları: XGB_minFE={best_w[0]:.2f}, XGB_raw={best_w[1]:.2f}, LGBM_raw={best_w[2]:.2f} | F2: {best_f2:.4f}")
+
+# --- Test seti için blended olasılıklar ---
+blended_test = (best_w[0] * test_dict["XGB_minFE"] +
+                best_w[1] * test_dict["XGB_raw"] +
+                best_w[2] * test_dict["LGBM_raw"])
+
+# --- Çok‑sınıflı eşik optimizasyonu (OOF üzerinde) ---
+blended_oof = (best_w[0] * oof_dict["XGB_minFE"] +
+               best_w[1] * oof_dict["XGB_raw"] +
+               best_w[2] * oof_dict["LGBM_raw"])
+best_t2, best_t1 = dual_threshold_search(blended_oof, y)
+
+# --- Test setinde son tahmin ---
+final_preds_test = np.zeros(len(X_test), dtype=int)
+for i in range(len(blended_test)):
+    if blended_test[i, 2] > best_t2:
+        final_preds_test[i] = 2
+    elif blended_test[i, 1] > best_t1:
+        final_preds_test[i] = 1
+    else:
+        final_preds_test[i] = 0
+
+# --- Submisson dosyası ---
+sub = pd.DataFrame({
+    'id': test['id'],
+    'Irrigation_Need': final_preds_test
+})
+sub['Irrigation_Need'] = sub['Irrigation_Need'].map({0: 'Low', 1: 'Medium', 2: 'High'})
+sub.to_csv("ensemble_submission.csv", index=False)
+print("\n✅ Submission dosyası kaydedildi: ensemble_submission.csv")
+```
