@@ -798,11 +798,13 @@ Soil_Type             406.3165      0.0          6
 Season                373.4697      0.0          7
 Region                188.5138      0.0          8
 
+![](./im/univariate_importance.png)
 
 ================================================================================
 📊 KORELASYON ANALİZİ
 ================================================================================
 
+![](./im/correlation_matrix.png)
 
 ✅ Yüksek korelasyonlu çift yok (|r| > 0.7)
 
@@ -810,6 +812,7 @@ Region                188.5138      0.0          8
 📊 İKİLİ ETKİLEŞİM ANALİZİ (Top 5 Sayısal)
 ================================================================================
 
+![](./im/top_interactions.png)
 
 ================================================================================
 📊 NULL IMPORTANCE ANALİZİ (CV‑Target Encoding ile)
@@ -851,6 +854,7 @@ Encoded features: 19
 ✅ 95th'den iyi özellikler: 5
 ❌ Gürültü olabilecekler: 14
 
+![](./im/null_importance_safe.png)
 
 💡 ÖNERİLEN ÖZELLİKLER (istatistiksel anlamlı):
    ['Crop_Growth_Stage', 'Soil_Moisture', 'Temperature_C', 'Mulching_Used', 'Wind_Speed_kmh']
