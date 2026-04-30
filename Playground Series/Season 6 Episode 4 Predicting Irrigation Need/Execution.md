@@ -479,6 +479,7 @@ print("\n✅ Tüm düzeltilmiş sonuçlar 'eda_results_fixed.zip' içinde.")
 ```
 
 # Results
+```python
 
 ================================================================================
 🔍 TEMEL BİLGİLER
@@ -901,3 +902,5 @@ Encoded features: 19
    ✓ Temperature_C: safe_score=2.32
    ✓ Mulching_Used: safe_score=2.15
    ✓ Wind_Speed_kmh: safe_score=1.92
+
+```
