@@ -340,10 +340,6 @@ for col in cat_cols:
 def fe(df):
     df = df.copy()
     
-    df['Evaporation_Risk'] = df['Temperature_C'] * df['Wind_Speed_kmh']
-    df['Effective_Water'] = df['Soil_Moisture'] + df['Rainfall_mm']/100
-    df['Stress_Index'] = df['Evaporation_Risk'] / (df['Soil_Moisture'] + 1)
-    
     return df
 
 # =========================
@@ -961,5 +957,7 @@ Selected threshold: **0.475**
 | Field_Area_hectare      | 0.003436   |
 | Region                  | 0.003270   |
 ```
+
+Feature engineering is not working. On the contrary, it is causing overfitting.
 
 #
