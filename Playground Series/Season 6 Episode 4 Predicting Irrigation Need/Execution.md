@@ -1,11 +1,43 @@
 # BASIC INFORMATION ABOUT THE DATASET
 
-**Total rows:** 630,000
-**Total columns:** 19
+🔍 SHAPE: (630000, 20)
+
+📌 INFO:
+```
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 630000 entries, 0 to 629999
+Data columns (total 20 columns):
+ #   Column                   Non-Null Count   Dtype  
+---  ------                   --------------   -----  
+ 0   Soil_Type                630000 non-null  object 
+ 1   Soil_pH                  630000 non-null  float64
+ 2   Soil_Moisture            630000 non-null  float64
+ 3   Organic_Carbon           630000 non-null  float64
+ 4   Electrical_Conductivity  630000 non-null  float64
+ 5   Temperature_C            630000 non-null  float64
+ 6   Humidity                 630000 non-null  float64
+ 7   Rainfall_mm              630000 non-null  float64
+ 8   Sunlight_Hours           630000 non-null  float64
+ 9   Wind_Speed_kmh           630000 non-null  float64
+ 10  Crop_Type                630000 non-null  object 
+ 11  Crop_Growth_Stage        630000 non-null  object 
+ 12  Season                   630000 non-null  object 
+ 13  Irrigation_Type          630000 non-null  object 
+ 14  Water_Source             630000 non-null  object 
+ 15  Field_Area_hectare       630000 non-null  float64
+ 16  Mulching_Used            630000 non-null  object 
+ 17  Previous_Irrigation_mm   630000 non-null  float64
+ 18  Region                   630000 non-null  object 
+ 19  Irrigation_Need          630000 non-null  int64  
+dtypes: float64(11), int64(1), object(8)
+memory usage: 96.1+ MB
+```
 
 **Target class distribution:**
 
-{0: 369917, 1: 239074, 2: 21009}
+|0|1|2|
+|:---:|:---:|:---:|
+|369917|239074|21009|
 
 ✅ No missing values.
 
@@ -19,6 +51,34 @@
 
 ['Soil_Type', 'Crop_Type', 'Crop_Growth_Stage', 'Season',
  'Irrigation_Type', 'Water_Source', 'Mulching_Used', 'Region']
+
+**Numerical Features**
+| Feature                  | count   | mean     | std      | min  | 1%   | 5%    | 25%   | 50%   | 75%   | 95%   | 99%   | max   |
+|--------------------------|---------|----------|----------|------|------|-------|-------|-------|-------|-------|-------|-------|
+| Soil_pH                 | 630000  | 6.482497 | 0.922504 | 4.80 | 4.87 | 5.060 | 5.690 | 6.44  | 7.27  | 7.95  | 8.12  | 8.20  |
+| Soil_Moisture           | 630000  | 37.304482| 16.377082| 8.00 | 8.63 | 11.290| 23.340| 37.75 | 51.27 | 62.35 | 64.62 | 64.99 |
+| Organic_Carbon          | 630000  | 0.922858 | 0.365808 | 0.30 | 0.32 | 0.370 | 0.610 | 0.91  | 1.22  | 1.52  | 1.58  | 1.60  |
+| Electrical_Conductivity | 630000  | 1.744605 | 0.952321 | 0.10 | 0.14 | 0.270 | 0.930 | 1.74  | 2.58  | 3.27  | 3.46  | 3.50  |
+| Temperature_C           | 630000  | 26.998166| 8.623621 | 12.00| 12.27| 13.440| 19.517| 26.96 | 34.54 | 40.34 | 41.60 | 42.00 |
+| Humidity                | 630000  | 61.563180| 19.708152| 25.00| 25.98| 29.540| 45.390| 61.65 | 79.12 | 91.48 | 94.48 | 94.99 |
+| Rainfall_mm             | 630000  | 1462.207566| 612.989738| 0.38 | 98.28| 521.539| 954.570| 1467.16| 2054.28| 2390.17| 2479.86| 2499.69 |
+| Sunlight_Hours          | 630000  | 7.513382 | 1.999322 | 4.00 | 4.06 | 4.400 | 5.760 | 7.58  | 9.25  | 10.59 | 10.91 | 11.00 |
+| Wind_Speed_kmh          | 630000  | 10.375394| 5.689458 | 0.50 | 0.76 | 1.590 | 5.280 | 10.48 | 15.43 | 19.04 | 19.79 | 20.00 |
+| Field_Area_hectare      | 630000  | 7.517745 | 4.218124 | 0.30 | 0.47 | 1.000 | 3.880 | 7.38  | 11.14 | 14.23 | 14.89 | 15.00 |
+| Previous_Irrigation_mm  | 630000  | 62.318177| 34.246939| 0.02 | 2.55 | 9.040 | 33.140| 61.15 | 92.69 | 112.89| 118.36| 119.99 |
+| Irrigation_Need         | 630000  | 0.446178 | 0.560178 | 0.00 | 0.00 | 0.000 | 0.000 | 0.00  | 1.00  | 1.00  | 2.00  | 2.00  |
+
+**Categorical Features**
+| Feature             | count  | unique | top        | freq   |
+|---------------------|--------|--------|------------|--------|
+| Soil_Type           | 630000 | 4      | Sandy      | 166509 |
+| Crop_Type           | 630000 | 6      | Sugarcane  | 108910 |
+| Crop_Growth_Stage   | 630000 | 4      | Harvest    | 167689 |
+| Season              | 630000 | 3      | Kharif     | 216561 |
+| Irrigation_Type     | 630000 | 4      | Canal      | 161901 |
+| Water_Source        | 630000 | 4      | Reservoir  | 162994 |
+| Mulching_Used       | 630000 | 2      | No         | 316453 |
+| Region              | 630000 | 5      | South      | 134809 |
 
 ---
 
@@ -1267,3 +1327,145 @@ sub['Irrigation_Need'] = sub['Irrigation_Need'].map({0: 'Low', 1: 'Medium', 2: '
 sub.to_csv("ensemble_submission.csv", index=False)
 print("\n✅ Submission dosyası kaydedildi: ensemble_submission.csv")
 ```
+
+Kullanılan class_weight: {np.int64(0): np.float64(0.5676949153458749), np.int64(1): np.float64(0.8783891180136694), np.int64(2): np.float64(19.99143224332429)}
+
+============================================================
+XGB_minFE modeli OOF üretiliyor...
+  Fold 1 tamamlandı.
+  Fold 2 tamamlandı.
+  Fold 3 tamamlandı.
+  Fold 4 tamamlandı.
+  Fold 5 tamamlandı.
+
+============================================================
+XGB_raw modeli OOF üretiliyor...
+  Fold 1 tamamlandı.
+  Fold 2 tamamlandı.
+  Fold 3 tamamlandı.
+  Fold 4 tamamlandı.
+  Fold 5 tamamlandı.
+
+============================================================
+LGBM_raw modeli OOF üretiliyor...
+[LightGBM] [Info] Auto-choosing col-wise multi-threading, the overhead of testing was 0.036467 seconds.
+You can set `force_col_wise=true` to remove the overhead.
+[LightGBM] [Info] Total Bins 2704
+[LightGBM] [Info] Number of data points in the train set: 504000, number of used features: 19
+[LightGBM] [Info] Start training from score -1.386319
+[LightGBM] [Info] Start training from score -1.386318
+[LightGBM] [Info] Start training from score -0.693123
+  Fold 1 tamamlandı.
+[LightGBM] [Info] Auto-choosing col-wise multi-threading, the overhead of testing was 0.033906 seconds.
+You can set `force_col_wise=true` to remove the overhead.
+[LightGBM] [Info] Total Bins 2705
+[LightGBM] [Info] Number of data points in the train set: 504000, number of used features: 19
+[LightGBM] [Info] Start training from score -1.386291
+[LightGBM] [Info] Start training from score -1.386285
+[LightGBM] [Info] Start training from score -0.693154
+  Fold 2 tamamlandı.
+[LightGBM] [Info] Auto-choosing col-wise multi-threading, the overhead of testing was 0.032343 seconds.
+You can set `force_col_wise=true` to remove the overhead.
+[LightGBM] [Info] Total Bins 2704
+[LightGBM] [Info] Number of data points in the train set: 504000, number of used features: 19
+[LightGBM] [Info] Start training from score -1.386287
+[LightGBM] [Info] Start training from score -1.386290
+[LightGBM] [Info] Start training from score -0.693153
+  Fold 3 tamamlandı.
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.009433 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 2705
+[LightGBM] [Info] Number of data points in the train set: 504000, number of used features: 19
+[LightGBM] [Info] Start training from score -1.386287
+[LightGBM] [Info] Start training from score -1.386290
+[LightGBM] [Info] Start training from score -0.693153
+  Fold 4 tamamlandı.
+[LightGBM] [Info] Auto-choosing col-wise multi-threading, the overhead of testing was 0.032659 seconds.
+You can set `force_col_wise=true` to remove the overhead.
+[LightGBM] [Info] Total Bins 2706
+[LightGBM] [Info] Number of data points in the train set: 504000, number of used features: 19
+[LightGBM] [Info] Start training from score -1.386287
+[LightGBM] [Info] Start training from score -1.386290
+[LightGBM] [Info] Start training from score -0.693153
+  Fold 5 tamamlandı.
+
+##  Evaluation
+En iyi blending ağırlıkları: XGB_minFE=0.30, XGB_raw=0.20, LGBM_raw=0.50 | F2: 0.9838
+En iyi eşikler: t2=0.625, t1=0.375 | F2: 0.9843
+Seçilen eşiklerle metrikler:
+              precision    recall  f1-score   support
+
+           0     0.9864    0.9941    0.9902    369917
+           1     0.9852    0.9732    0.9791    239074
+           2     0.9364    0.9370    0.9367     21009
+
+    accuracy                         0.9843    630000
+   macro avg     0.9693    0.9681    0.9687    630000
+weighted avg     0.9843    0.9843    0.9842    630000
+
+
+1. Overall performance evaluation
+
+Final results:
+
+Accuracy: 0.9843
+Macro F1: ~0.9687
+Class 2 (High):
+Precision: 0.936
+Recall: 0.937
+F1: 0.936
+
+This means:
+
+The model has learned very well
+Performance is strong even for the minority class (High)
+Ensemble + threshold tuning made a significant contribution
+
+1. Feature Engineering (FE) impact — critical point
+
+XGB_minFE vs XGB_raw
+MinFE model:
+Additional features: Evaporation_Risk, Water_Deficit, etc.
+Raw model:
+Only original features
+
+📌 Ensemble weights:
+
+XGB_minFE = 0.30
+XGB_raw   = 0.20
+LGBM_raw  = 0.50
+
+👉 This shows:
+
+The model with FE contributes the least
+The strongest model is LGBM raw (no FE)
+📌 What does this indicate?
+
+In this dataset:
+
+The original features already carry very strong signal
+
+FE:
+is likely redundant
+may add noise
+or may create unnecessary correlations for tree models
+
+💡 Tree-based models (XGB/LGBM):
+
+already learn interactions internally
+manual feature engineering is often not beneficial and can even be harmful.
+
+1. Is there a sign of overfitting?
+
+Yes, there is a small but important signal:
+
+Suspicious point:
+OOF F2: 0.9838
+CV-like score in earlier outputs: ~0.961
+
+👉 If the gap is large:
+
+due to ensemble + threshold tuning
+not leakage, but:
+OOF optimization may be too adapted to validation distribution
